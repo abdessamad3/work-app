@@ -7,11 +7,15 @@ import com.coffer.app.data.local.entity.ContactEntity
 import com.coffer.app.data.local.entity.LineItemEntity
 import com.coffer.app.data.local.entity.OrderEntity
 import com.coffer.app.data.local.entity.PaymentEntity
+import com.coffer.app.data.local.entity.ProductEntity
 import com.coffer.app.data.repository.ContactRepository
 import com.coffer.app.data.repository.OrderRepository
 import com.coffer.app.data.repository.PaymentRepository
+import com.coffer.app.data.repository.ProductRepository
 import com.coffer.app.domain.OrderStatus
+import com.coffer.app.domain.SuggestedPrice
 import com.coffer.app.domain.computeOrder
+import com.coffer.app.domain.suggestPriceFor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
@@ -39,6 +43,7 @@ class OrderDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val orderRepository: OrderRepository,
     private val paymentRepository: PaymentRepository,
+    private val productRepository: ProductRepository,
     contactRepository: ContactRepository
 ) : ViewModel() {
 
@@ -69,6 +74,28 @@ class OrderDetailViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), OrderDetailUiState())
 
+    val products: StateFlow<List<ProductEntity>> = productRepository.getAllProducts()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val allLineItems: StateFlow<List<LineItemEntity>> = orderRepository.getAllLineItems()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    private val allOrders: StateFlow<List<OrderEntity>> = orderRepository.getAllOrders()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun suggestedPriceFor(productId: Int): SuggestedPrice {
+        val fallback = SuggestedPrice(products.value.find { it.id == productId }?.defaultUnitPriceCents ?: 0, 0)
+        val contactId = uiState.value.order?.contactId ?: return fallback
+        return suggestPriceFor(productId, contactId, allLineItems.value, allOrders.value) ?: fallback
+    }
+
+    fun createProduct(name: String, defaultPriceCents: Long, onCreated: (Int) -> Unit) {
+        if (name.isBlank() || defaultPriceCents <= 0) return
+        viewModelScope.launch {
+            val id = productRepository.createProduct(name.trim(), defaultPriceCents)
+            onCreated(id)
+        }
+    }
+
     fun addPayment(amountCents: Long, note: String?) {
         viewModelScope.launch {
             paymentRepository.addPayment(orderId, amountCents, note)
@@ -93,15 +120,17 @@ class OrderDetailViewModel @Inject constructor(
         }
     }
 
-    fun addLineItem(name: String, quantity: Int, unitPriceCents: Long) {
+    fun addLineItem(productId: Int, quantity: Int, listUnitPriceCents: Long, discountPercent: Int) {
+        val name = products.value.find { it.id == productId }?.name ?: return
         viewModelScope.launch {
-            orderRepository.addLineItem(orderId, name, quantity, unitPriceCents)
+            orderRepository.addLineItem(orderId, productId, name, quantity, listUnitPriceCents, discountPercent)
         }
     }
 
-    fun updateLineItem(item: LineItemEntity, name: String, quantity: Int, unitPriceCents: Long) {
+    fun updateLineItem(item: LineItemEntity, productId: Int, quantity: Int, listUnitPriceCents: Long, discountPercent: Int) {
+        val name = products.value.find { it.id == productId }?.name ?: item.name
         viewModelScope.launch {
-            orderRepository.updateLineItem(item, name, quantity, unitPriceCents)
+            orderRepository.updateLineItem(item, productId, name, quantity, listUnitPriceCents, discountPercent)
         }
     }
 

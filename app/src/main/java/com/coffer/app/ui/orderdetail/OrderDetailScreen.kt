@@ -1,5 +1,6 @@
 package com.coffer.app.ui.orderdetail
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
@@ -20,6 +22,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -36,14 +39,18 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coffer.app.data.local.entity.LineItemEntity
 import com.coffer.app.data.local.entity.PaymentEntity
+import com.coffer.app.data.local.entity.ProductEntity
 import com.coffer.app.domain.OrderStatus
+import com.coffer.app.domain.SuggestedPrice
 import com.coffer.app.domain.formatCents
+import com.coffer.app.domain.lineTotalCents
 import com.coffer.app.ui.components.StatusChip
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -53,6 +60,7 @@ fun OrderDetailScreen(
     viewModel: OrderDetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val products by viewModel.products.collectAsState()
     val order = uiState.order
 
     var showMenu by remember { mutableStateOf(false) }
@@ -119,9 +127,13 @@ fun OrderDetailScreen(
                         ) {
                             Column {
                                 Text(lineItem.name)
-                                Text("×${lineItem.quantity} @ ${formatCents(lineItem.unitPriceCents)}", style = MaterialTheme.typography.bodySmall)
+                                val discountSuffix = if (lineItem.discountPercent > 0) " − ${lineItem.discountPercent}%" else ""
+                                Text(
+                                    "×${lineItem.quantity} @ ${formatCents(lineItem.listUnitPriceCents)}$discountSuffix",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
                             }
-                            Text(formatCents(lineItem.quantity * lineItem.unitPriceCents))
+                            Text(formatCents(lineItem.lineTotalCents()))
                         }
                     }
                 }
@@ -191,12 +203,16 @@ fun OrderDetailScreen(
         if (showAddItemDialog) {
             LineItemDialog(
                 title = "Add item",
-                initialName = "",
+                products = products,
+                initialProductId = null,
                 initialQty = "",
-                initialPrice = "",
+                initialListPrice = "",
+                initialDiscountPercent = "0",
+                onCreateProduct = { name, priceCents, onCreated -> viewModel.createProduct(name, priceCents, onCreated) },
+                onSuggestPrice = { productId -> viewModel.suggestedPriceFor(productId) },
                 onDismiss = { showAddItemDialog = false },
-                onSave = { name, qty, priceCents ->
-                    viewModel.addLineItem(name, qty, priceCents)
+                onSave = { productId, qty, listPriceCents, discount ->
+                    viewModel.addLineItem(productId, qty, listPriceCents, discount)
                     showAddItemDialog = false
                 },
                 onDelete = null
@@ -206,12 +222,16 @@ fun OrderDetailScreen(
         itemDialogTarget?.let { item ->
             LineItemDialog(
                 title = "Edit item",
-                initialName = item.name,
+                products = products,
+                initialProductId = item.productId,
                 initialQty = item.quantity.toString(),
-                initialPrice = String.format("%.2f", item.unitPriceCents / 100.0),
+                initialListPrice = String.format("%.2f", item.listUnitPriceCents / 100.0),
+                initialDiscountPercent = item.discountPercent.toString(),
+                onCreateProduct = { name, priceCents, onCreated -> viewModel.createProduct(name, priceCents, onCreated) },
+                onSuggestPrice = { productId -> viewModel.suggestedPriceFor(productId) },
                 onDismiss = { itemDialogTarget = null },
-                onSave = { name, qty, priceCents ->
-                    viewModel.updateLineItem(item, name, qty, priceCents)
+                onSave = { productId, qty, listPriceCents, discount ->
+                    viewModel.updateLineItem(item, productId, qty, listPriceCents, discount)
                     itemDialogTarget = null
                 },
                 onDelete = {
@@ -295,39 +315,110 @@ private fun PaymentDialog(
 @Composable
 private fun LineItemDialog(
     title: String,
-    initialName: String,
+    products: List<ProductEntity>,
+    initialProductId: Int?,
     initialQty: String,
-    initialPrice: String,
+    initialListPrice: String,
+    initialDiscountPercent: String,
+    onCreateProduct: (String, Long, (Int) -> Unit) -> Unit,
+    onSuggestPrice: (Int) -> SuggestedPrice,
     onDismiss: () -> Unit,
-    onSave: (String, Int, Long) -> Unit,
+    onSave: (Int, Int, Long, Int) -> Unit,
     onDelete: (() -> Unit)?
 ) {
-    var name by remember { mutableStateOf(initialName) }
+    var selectedProductId by remember { mutableStateOf(initialProductId) }
+    var usingNewProduct by remember { mutableStateOf(false) }
+    var newProductName by remember { mutableStateOf("") }
+    var newProductPrice by remember { mutableStateOf("") }
     var qty by remember { mutableStateOf(initialQty) }
-    var price by remember { mutableStateOf(initialPrice) }
+    var listPrice by remember { mutableStateOf(initialListPrice) }
+    var discountPercent by remember { mutableStateOf(initialDiscountPercent) }
     var error by remember { mutableStateOf<String?>(null) }
+
+    val selectedProduct = products.find { it.id == selectedProductId }
+    val canChangeProduct = initialProductId == null
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
             Column {
-                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Product") }, singleLine = true)
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(value = qty, onValueChange = { qty = it }, label = { Text("Quantity") }, singleLine = true)
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(value = price, onValueChange = { price = it }, label = { Text("Unit price") }, singleLine = true)
+                if (canChangeProduct && selectedProduct == null && !usingNewProduct) {
+                    Text("Product", style = MaterialTheme.typography.bodySmall)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        products.forEach { product ->
+                            FilterChip(
+                                selected = false,
+                                onClick = {
+                                    selectedProductId = product.id
+                                    val suggestion = onSuggestPrice(product.id)
+                                    listPrice = String.format("%.2f", suggestion.listUnitPriceCents / 100.0)
+                                    discountPercent = suggestion.discountPercent.toString()
+                                },
+                                label = { Text(product.name) }
+                            )
+                        }
+                        FilterChip(selected = false, onClick = { usingNewProduct = true }, label = { Text("+ New product") })
+                    }
+                } else if (canChangeProduct && usingNewProduct) {
+                    OutlinedTextField(
+                        value = newProductName,
+                        onValueChange = { newProductName = it },
+                        label = { Text("Product name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = newProductPrice,
+                            onValueChange = { newProductPrice = it },
+                            label = { Text("Default price") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Button(
+                            enabled = newProductName.isNotBlank() && (newProductPrice.toDoubleOrNull() ?: 0.0) > 0,
+                            onClick = {
+                                val priceCents = Math.round((newProductPrice.toDoubleOrNull() ?: 0.0) * 100)
+                                onCreateProduct(newProductName, priceCents) { newId ->
+                                    selectedProductId = newId
+                                    usingNewProduct = false
+                                    listPrice = newProductPrice
+                                    discountPercent = "0"
+                                }
+                            }
+                        ) { Text("Add") }
+                    }
+                } else if (selectedProduct != null) {
+                    Text(selectedProduct.name, fontWeight = FontWeight.Bold)
+                }
+
+                if (selectedProduct != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(value = qty, onValueChange = { qty = it }, label = { Text("Quantity") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(value = listPrice, onValueChange = { listPrice = it }, label = { Text("List price") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(value = discountPercent, onValueChange = { discountPercent = it }, label = { Text("Discount %") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                }
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             }
         },
         confirmButton = {
             TextButton(onClick = {
+                val productId = selectedProductId
                 val quantity = qty.toIntOrNull()
-                val unitPrice = price.toDoubleOrNull()
-                if (name.isBlank() || quantity == null || quantity <= 0 || unitPrice == null || unitPrice <= 0) {
-                    error = "Fill in a product, quantity and price greater than 0."
+                val price = listPrice.toDoubleOrNull()
+                val discount = discountPercent.toIntOrNull()?.coerceIn(0, 100)
+                if (productId == null || quantity == null || quantity <= 0 || price == null || price <= 0 || discount == null) {
+                    error = "Choose a product, and fill in a quantity and price greater than 0."
                 } else {
-                    onSave(name.trim(), quantity, Math.round(unitPrice * 100))
+                    onSave(productId, quantity, Math.round(price * 100), discount)
                 }
             }) { Text("Save") }
         },

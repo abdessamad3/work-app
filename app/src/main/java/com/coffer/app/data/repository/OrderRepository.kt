@@ -8,14 +8,17 @@ import com.coffer.app.data.local.dao.PaymentDao
 import com.coffer.app.data.local.entity.LineItemEntity
 import com.coffer.app.data.local.entity.OrderEntity
 import com.coffer.app.data.local.entity.PaymentEntity
+import com.coffer.app.domain.effectiveUnitPriceCents
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 import javax.inject.Singleton
 
 data class NewLineItem(
+    val productId: Int,
     val name: String,
     val quantity: Int,
-    val unitPriceCents: Long
+    val listUnitPriceCents: Long,
+    val discountPercent: Int
 )
 
 @Singleton
@@ -33,6 +36,8 @@ class OrderRepository @Inject constructor(
 
     fun getItemsForOrder(orderId: Int): Flow<List<LineItemEntity>> = lineItemDao.getItemsForOrder(orderId)
 
+    fun getAllLineItems(): Flow<List<LineItemEntity>> = lineItemDao.getAllLineItems()
+
     /** Creates the order (with its line items, if itemized) and an optional initial payment as one atomic write. */
     suspend fun createOrder(
         contactId: Int,
@@ -48,7 +53,16 @@ class OrderRepository @Inject constructor(
 
         if (itemized && items.isNotEmpty()) {
             lineItemDao.insertAll(
-                items.map { LineItemEntity(orderId = orderId, name = it.name, quantity = it.quantity, unitPriceCents = it.unitPriceCents) }
+                items.map {
+                    LineItemEntity(
+                        orderId = orderId,
+                        productId = it.productId,
+                        name = it.name,
+                        quantity = it.quantity,
+                        listUnitPriceCents = it.listUnitPriceCents,
+                        discountPercent = it.discountPercent
+                    )
+                }
             )
         }
 
@@ -65,15 +79,36 @@ class OrderRepository @Inject constructor(
         orderDao.update(order.copy(totalAmountCents = totalAmountCents, description = description))
     }
 
-    suspend fun addLineItem(orderId: Int, name: String, quantity: Int, unitPriceCents: Long) = database.withTransaction {
-        lineItemDao.insertAll(listOf(LineItemEntity(orderId = orderId, name = name, quantity = quantity, unitPriceCents = unitPriceCents)))
-        recalculateItemizedTotal(orderId)
-    }
+    suspend fun addLineItem(orderId: Int, productId: Int, name: String, quantity: Int, listUnitPriceCents: Long, discountPercent: Int) =
+        database.withTransaction {
+            lineItemDao.insertAll(
+                listOf(
+                    LineItemEntity(
+                        orderId = orderId,
+                        productId = productId,
+                        name = name,
+                        quantity = quantity,
+                        listUnitPriceCents = listUnitPriceCents,
+                        discountPercent = discountPercent
+                    )
+                )
+            )
+            recalculateItemizedTotal(orderId)
+        }
 
-    suspend fun updateLineItem(item: LineItemEntity, name: String, quantity: Int, unitPriceCents: Long) = database.withTransaction {
-        lineItemDao.update(item.copy(name = name, quantity = quantity, unitPriceCents = unitPriceCents))
-        recalculateItemizedTotal(item.orderId)
-    }
+    suspend fun updateLineItem(item: LineItemEntity, productId: Int, name: String, quantity: Int, listUnitPriceCents: Long, discountPercent: Int) =
+        database.withTransaction {
+            lineItemDao.update(
+                item.copy(
+                    productId = productId,
+                    name = name,
+                    quantity = quantity,
+                    listUnitPriceCents = listUnitPriceCents,
+                    discountPercent = discountPercent
+                )
+            )
+            recalculateItemizedTotal(item.orderId)
+        }
 
     suspend fun deleteLineItem(item: LineItemEntity) = database.withTransaction {
         lineItemDao.delete(item)
@@ -83,7 +118,8 @@ class OrderRepository @Inject constructor(
     private suspend fun recalculateItemizedTotal(orderId: Int) {
         val items = lineItemDao.getItemsForOrderOnce(orderId)
         val order = orderDao.getOrderByIdOnce(orderId) ?: return
-        orderDao.update(order.copy(totalAmountCents = items.sumOf { it.quantity * it.unitPriceCents }))
+        val total = items.sumOf { effectiveUnitPriceCents(it.listUnitPriceCents, it.discountPercent) * it.quantity }
+        orderDao.update(order.copy(totalAmountCents = total))
     }
 
     /** Deletes the order along with its line items and payments. */

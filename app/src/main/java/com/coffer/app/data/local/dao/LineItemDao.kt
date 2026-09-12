@@ -28,4 +28,7 @@ interface LineItemDao {
 
     @Query("SELECT * FROM line_items WHERE orderId = :orderId")
     suspend fun getItemsForOrderOnce(orderId: Int): List<LineItemEntity>
+
+    @Query("SELECT * FROM line_items")
+    fun getAllLineItems(): Flow<List<LineItemEntity>>
 }

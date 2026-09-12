@@ -2,6 +2,7 @@ package com.coffer.app.ui.components
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Wallet
 import androidx.compose.material3.Icon
@@ -25,6 +26,12 @@ fun CofferBottomBar(currentRoute: String, onNavigate: (String) -> Unit) {
             onClick = { onNavigate(Routes.CONTACTS) },
             icon = { Icon(Icons.Default.People, contentDescription = null) },
             label = { Text("Contacts") }
+        )
+        NavigationBarItem(
+            selected = currentRoute == Routes.PRODUCTS,
+            onClick = { onNavigate(Routes.PRODUCTS) },
+            icon = { Icon(Icons.Default.Inventory2, contentDescription = null) },
+            label = { Text("Products") }
         )
         NavigationBarItem(
             selected = currentRoute == Routes.ACTIVITY,

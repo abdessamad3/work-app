@@ -9,12 +9,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -38,13 +39,31 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coffer.app.data.local.entity.ContactType
+import com.coffer.app.domain.effectiveUnitPriceCents
 import com.coffer.app.domain.formatCents
 import kotlinx.coroutines.flow.collectLatest
 
-private data class ItemDraft(val id: Int, val name: String = "", val qty: String = "", val price: String = "")
+private data class ItemDraft(
+    val id: Int,
+    val productId: Int? = null,
+    val usingNewProduct: Boolean = false,
+    val newProductName: String = "",
+    val newProductPrice: String = "",
+    val qty: String = "",
+    val listPrice: String = "",
+    val discountPercent: String = "0"
+)
+
+private fun ItemDraft.totalCents(): Long {
+    val qtyVal = qty.toIntOrNull() ?: 0
+    val listVal = listPrice.toDoubleOrNull() ?: 0.0
+    val discount = discountPercent.toIntOrNull()?.coerceIn(0, 100) ?: 0
+    return effectiveUnitPriceCents(Math.round(listVal * 100), discount) * qtyVal
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,6 +75,7 @@ fun NewOrderScreen(
     val suppliers by viewModel.suppliers.collectAsState()
     val clients by viewModel.clients.collectAsState()
     val presetContact by viewModel.presetContact.collectAsState()
+    val products by viewModel.products.collectAsState()
 
     var isPurchase by remember { mutableStateOf(true) }
     var selectedContactId by remember { mutableStateOf<Int?>(null) }
@@ -80,7 +100,7 @@ fun NewOrderScreen(
     }
 
     val contactOptions = if (isPurchase) suppliers else clients
-    val itemizedTotalCents = items.sumOf { (it.qty.toIntOrNull() ?: 0) * Math.round((it.price.toDoubleOrNull() ?: 0.0) * 100) }
+    val itemizedTotalCents = items.sumOf { it.totalCents() }
 
     Scaffold(
         topBar = {
@@ -184,33 +204,114 @@ fun NewOrderScreen(
                     singleLine = true
                 )
             } else {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     items.forEachIndexed { index, draft ->
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            OutlinedTextField(
-                                value = draft.name,
-                                onValueChange = { v -> items = items.toMutableList().also { it[index] = it[index].copy(name = v) } },
-                                label = { Text("Product") },
-                                modifier = Modifier.weight(2f),
-                                singleLine = true
-                            )
-                            OutlinedTextField(
-                                value = draft.qty,
-                                onValueChange = { v -> items = items.toMutableList().also { it[index] = it[index].copy(qty = v) } },
-                                label = { Text("Qty") },
-                                modifier = Modifier.weight(1f),
-                                singleLine = true
-                            )
-                            OutlinedTextField(
-                                value = draft.price,
-                                onValueChange = { v -> items = items.toMutableList().also { it[index] = it[index].copy(price = v) } },
-                                label = { Text("Price") },
-                                modifier = Modifier.weight(1f),
-                                singleLine = true
-                            )
-                            IconButton(onClick = {
-                                items = items.filterIndexed { i, _ -> i != index }.ifEmpty { listOf(ItemDraft(nextItemId++)) }
-                            }) { Icon(Icons.Default.Close, contentDescription = "Remove item") }
+                        Card(modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("Item ${index + 1}", style = MaterialTheme.typography.labelMedium)
+                                    IconButton(onClick = {
+                                        items = items.filterIndexed { i, _ -> i != index }.ifEmpty { listOf(ItemDraft(nextItemId++)) }
+                                    }) { Icon(Icons.Default.Close, contentDescription = "Remove item") }
+                                }
+
+                                val selectedProduct = products.find { it.id == draft.productId }
+                                if (selectedProduct == null && !draft.usingNewProduct) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        products.forEach { product ->
+                                            FilterChip(
+                                                selected = false,
+                                                onClick = {
+                                                    val suggestion = viewModel.suggestedPriceFor(product.id, selectedContactId)
+                                                    items = items.toMutableList().also {
+                                                        it[index] = it[index].copy(
+                                                            productId = product.id,
+                                                            listPrice = String.format("%.2f", suggestion.listUnitPriceCents / 100.0),
+                                                            discountPercent = suggestion.discountPercent.toString()
+                                                        )
+                                                    }
+                                                },
+                                                label = { Text(product.name) }
+                                            )
+                                        }
+                                        FilterChip(
+                                            selected = false,
+                                            onClick = { items = items.toMutableList().also { it[index] = it[index].copy(usingNewProduct = true) } },
+                                            label = { Text("+ New product") }
+                                        )
+                                    }
+                                } else if (draft.usingNewProduct) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        OutlinedTextField(
+                                            value = draft.newProductName,
+                                            onValueChange = { v -> items = items.toMutableList().also { it[index] = it[index].copy(newProductName = v) } },
+                                            label = { Text("Product name") },
+                                            modifier = Modifier.weight(1f),
+                                            singleLine = true
+                                        )
+                                        OutlinedTextField(
+                                            value = draft.newProductPrice,
+                                            onValueChange = { v -> items = items.toMutableList().also { it[index] = it[index].copy(newProductPrice = v) } },
+                                            label = { Text("Default price") },
+                                            modifier = Modifier.weight(1f),
+                                            singleLine = true
+                                        )
+                                        Button(
+                                            enabled = draft.newProductName.isNotBlank() && (draft.newProductPrice.toDoubleOrNull() ?: 0.0) > 0,
+                                            onClick = {
+                                                val priceCents = Math.round((draft.newProductPrice.toDoubleOrNull() ?: 0.0) * 100)
+                                                viewModel.createProduct(draft.newProductName, priceCents) { newProductId ->
+                                                    items = items.toMutableList().also {
+                                                        it[index] = it[index].copy(
+                                                            productId = newProductId,
+                                                            usingNewProduct = false,
+                                                            listPrice = draft.newProductPrice,
+                                                            discountPercent = "0"
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        ) { Text("Add") }
+                                    }
+                                } else if (selectedProduct != null) {
+                                    Text(selectedProduct.name, fontWeight = FontWeight.Bold)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        OutlinedTextField(
+                                            value = draft.qty,
+                                            onValueChange = { v -> items = items.toMutableList().also { it[index] = it[index].copy(qty = v) } },
+                                            label = { Text("Qty") },
+                                            modifier = Modifier.weight(1f),
+                                            singleLine = true
+                                        )
+                                        OutlinedTextField(
+                                            value = draft.listPrice,
+                                            onValueChange = { v -> items = items.toMutableList().also { it[index] = it[index].copy(listPrice = v) } },
+                                            label = { Text("List price") },
+                                            modifier = Modifier.weight(1f),
+                                            singleLine = true
+                                        )
+                                        OutlinedTextField(
+                                            value = draft.discountPercent,
+                                            onValueChange = { v -> items = items.toMutableList().also { it[index] = it[index].copy(discountPercent = v) } },
+                                            label = { Text("Discount %") },
+                                            modifier = Modifier.weight(1f),
+                                            singleLine = true
+                                        )
+                                    }
+                                    Text(
+                                        "→ ${formatCents(draft.totalCents())} total",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
                         }
                     }
                     OutlinedButton(onClick = { items = items + ItemDraft(nextItemId++) }, modifier = Modifier.fillMaxWidth()) {
@@ -242,7 +343,9 @@ fun NewOrderScreen(
                         itemized = itemized,
                         totalAmountText = totalAmountText,
                         description = descriptionText,
-                        items = items.map { Triple(it.name, it.qty, it.price) },
+                        items = items.mapNotNull { draft ->
+                            draft.productId?.let { pid -> ItemEntry(pid, draft.qty, draft.listPrice, draft.discountPercent) }
+                        },
                         paymentNowText = paymentNowText,
                         onError = { errorText = it }
                     )

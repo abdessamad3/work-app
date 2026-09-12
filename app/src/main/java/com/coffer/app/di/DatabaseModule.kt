@@ -7,6 +7,7 @@ import com.coffer.app.data.local.dao.ContactDao
 import com.coffer.app.data.local.dao.LineItemDao
 import com.coffer.app.data.local.dao.OrderDao
 import com.coffer.app.data.local.dao.PaymentDao
+import com.coffer.app.data.local.dao.ProductDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -21,7 +22,9 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase =
-        Room.databaseBuilder(context, AppDatabase::class.java, AppDatabase.DATABASE_NAME).build()
+        Room.databaseBuilder(context, AppDatabase::class.java, AppDatabase.DATABASE_NAME)
+            .fallbackToDestructiveMigration()
+            .build()
 
     @Provides
     fun provideContactDao(database: AppDatabase): ContactDao = database.contactDao()
@@ -34,4 +37,7 @@ object DatabaseModule {
 
     @Provides
     fun providePaymentDao(database: AppDatabase): PaymentDao = database.paymentDao()
+
+    @Provides
+    fun provideProductDao(database: AppDatabase): ProductDao = database.productDao()
 }

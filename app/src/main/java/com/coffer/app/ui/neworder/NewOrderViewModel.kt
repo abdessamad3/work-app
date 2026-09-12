@@ -5,11 +5,19 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.coffer.app.data.local.entity.ContactEntity
 import com.coffer.app.data.local.entity.ContactType
+import com.coffer.app.data.local.entity.LineItemEntity
+import com.coffer.app.data.local.entity.OrderEntity
+import com.coffer.app.data.local.entity.ProductEntity
 import com.coffer.app.data.repository.ContactRepository
 import com.coffer.app.data.repository.NewLineItem
 import com.coffer.app.data.repository.OrderRepository
+import com.coffer.app.data.repository.ProductRepository
+import com.coffer.app.domain.SuggestedPrice
+import com.coffer.app.domain.effectiveUnitPriceCents
+import com.coffer.app.domain.suggestPriceFor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -18,11 +26,19 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+data class ItemEntry(
+    val productId: Int,
+    val quantity: String,
+    val listPrice: String,
+    val discountPercent: String
+)
+
 @HiltViewModel
 class NewOrderViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val contactRepository: ContactRepository,
-    private val orderRepository: OrderRepository
+    private val orderRepository: OrderRepository,
+    private val productRepository: ProductRepository
 ) : ViewModel() {
 
     val presetContactId: Int? = savedStateHandle.get<Int>("contactId")?.takeIf { it > 0 }
@@ -30,11 +46,19 @@ class NewOrderViewModel @Inject constructor(
     val presetContact: StateFlow<ContactEntity?> = presetContactId
         ?.let { contactRepository.getContactById(it) }
         ?.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-        ?: kotlinx.coroutines.flow.MutableStateFlow(null)
+        ?: MutableStateFlow(null)
 
     val suppliers: StateFlow<List<ContactEntity>> = contactRepository.getContactsByType(ContactType.SUPPLIER.name)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val clients: StateFlow<List<ContactEntity>> = contactRepository.getContactsByType(ContactType.CLIENT.name)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val products: StateFlow<List<ProductEntity>> = productRepository.getAllProducts()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val allLineItems: StateFlow<List<LineItemEntity>> = orderRepository.getAllLineItems()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    private val allOrders: StateFlow<List<OrderEntity>> = orderRepository.getAllOrders()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _created = MutableSharedFlow<Int>()
@@ -51,6 +75,21 @@ class NewOrderViewModel @Inject constructor(
         }
     }
 
+    fun createProduct(name: String, defaultPriceCents: Long, onCreated: (Int) -> Unit) {
+        if (name.isBlank() || defaultPriceCents <= 0) return
+        viewModelScope.launch {
+            val id = productRepository.createProduct(name.trim(), defaultPriceCents)
+            onCreated(id)
+        }
+    }
+
+    /** What you last charged (or paid) this contact for this product, if anything; else the product's default. */
+    fun suggestedPriceFor(productId: Int, contactId: Int?): SuggestedPrice {
+        val fallback = SuggestedPrice(products.value.find { it.id == productId }?.defaultUnitPriceCents ?: 0, 0)
+        if (contactId == null) return fallback
+        return suggestPriceFor(productId, contactId, allLineItems.value, allOrders.value) ?: fallback
+    }
+
     fun submit(
         isPurchase: Boolean,
         existingContactId: Int?,
@@ -58,7 +97,7 @@ class NewOrderViewModel @Inject constructor(
         itemized: Boolean,
         totalAmountText: String,
         description: String,
-        items: List<Triple<String, String, String>>,
+        items: List<ItemEntry>,
         paymentNowText: String,
         onError: (String) -> Unit
     ) {
@@ -80,18 +119,22 @@ class NewOrderViewModel @Inject constructor(
             val desc: String?
 
             if (itemized) {
-                cleanedItems = items.mapNotNull { (name, qtyText, priceText) ->
-                    val qty = qtyText.toIntOrNull() ?: 0
-                    val price = priceText.toDoubleOrNull() ?: 0.0
-                    if (name.isNotBlank() && qty > 0 && price > 0) {
-                        NewLineItem(name.trim(), qty, Math.round(price * 100))
+                cleanedItems = items.mapNotNull { entry ->
+                    val qty = entry.quantity.toIntOrNull() ?: 0
+                    val listPrice = entry.listPrice.toDoubleOrNull() ?: 0.0
+                    val discount = entry.discountPercent.toIntOrNull()?.coerceIn(0, 100) ?: 0
+                    val product = products.value.find { it.id == entry.productId }
+                    if (product != null && qty > 0 && listPrice > 0) {
+                        NewLineItem(product.id, product.name, qty, Math.round(listPrice * 100), discount)
                     } else null
                 }
                 if (cleanedItems.isEmpty()) {
-                    onError("Add at least one item with a name, quantity and price.")
+                    onError("Add at least one item with a product, quantity and price.")
                     return@launch
                 }
-                totalCents = cleanedItems.sumOf { it.quantity * it.unitPriceCents }
+                totalCents = cleanedItems.sumOf {
+                    effectiveUnitPriceCents(it.listUnitPriceCents, it.discountPercent) * it.quantity
+                }
                 desc = null
             } else {
                 val amount = totalAmountText.toDoubleOrNull()

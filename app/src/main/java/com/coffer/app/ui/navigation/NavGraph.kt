@@ -14,6 +14,7 @@ import com.coffer.app.ui.contacts.ContactsScreen
 import com.coffer.app.ui.dashboard.DashboardScreen
 import com.coffer.app.ui.neworder.NewOrderScreen
 import com.coffer.app.ui.orderdetail.OrderDetailScreen
+import com.coffer.app.ui.products.ProductsScreen
 
 @Composable
 fun CofferNavGraph() {
@@ -39,6 +40,9 @@ fun CofferNavGraph() {
                 onNavigate = { route -> navigateToTab(route) },
                 onOpenContact = { contactId -> navController.navigate(Routes.contactDetail(contactId)) }
             )
+        }
+        composable(Routes.PRODUCTS) {
+            ProductsScreen(onNavigate = { route -> navigateToTab(route) })
         }
         composable(Routes.ACTIVITY) {
             ActivityScreen(
