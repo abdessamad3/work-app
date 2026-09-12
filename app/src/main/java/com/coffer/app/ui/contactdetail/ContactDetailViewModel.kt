@@ -14,18 +14,21 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class ContactDetailUiState(
     val contact: ContactEntity? = null,
     val orders: List<OrderComputed> = emptyList(),
     val totalRemainingCents: Long = 0
-)
+) {
+    val canDelete: Boolean get() = orders.isEmpty()
+}
 
 @HiltViewModel
 class ContactDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
-    contactRepository: ContactRepository,
+    private val contactRepository: ContactRepository,
     orderRepository: OrderRepository,
     paymentRepository: PaymentRepository
 ) : ViewModel() {
@@ -44,4 +47,19 @@ class ContactDetailViewModel @Inject constructor(
             totalRemainingCents = computed.sumOf { it.remainingCents }
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ContactDetailUiState())
+
+    fun renameContact(newName: String) {
+        viewModelScope.launch {
+            contactRepository.renameContact(contactId, newName)
+        }
+    }
+
+    /** No-op if the contact still has orders — callers should gate this on [ContactDetailUiState.canDelete]. */
+    fun deleteContact(onDeleted: () -> Unit) {
+        if (!uiState.value.canDelete) return
+        viewModelScope.launch {
+            contactRepository.deleteContact(contactId)
+            onDeleted()
+        }
+    }
 }

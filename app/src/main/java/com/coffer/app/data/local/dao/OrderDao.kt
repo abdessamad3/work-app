@@ -1,8 +1,10 @@
 package com.coffer.app.data.local.dao
 
 import androidx.room.Dao
+import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.Query
+import androidx.room.Update
 import com.coffer.app.data.local.entity.OrderEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -12,6 +14,12 @@ interface OrderDao {
     @Insert
     suspend fun insert(order: OrderEntity): Long
 
+    @Update
+    suspend fun update(order: OrderEntity)
+
+    @Delete
+    suspend fun delete(order: OrderEntity)
+
     @Query("SELECT * FROM orders ORDER BY createdAt DESC")
     fun getAllOrders(): Flow<List<OrderEntity>>
 
@@ -20,4 +28,7 @@ interface OrderDao {
 
     @Query("SELECT * FROM orders WHERE id = :orderId")
     fun getOrderById(orderId: Int): Flow<OrderEntity?>
+
+    @Query("SELECT * FROM orders WHERE id = :orderId")
+    suspend fun getOrderByIdOnce(orderId: Int): OrderEntity?
 }

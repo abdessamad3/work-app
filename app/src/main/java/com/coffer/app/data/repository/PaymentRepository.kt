@@ -17,4 +17,12 @@ class PaymentRepository @Inject constructor(
     suspend fun addPayment(orderId: Int, amountCents: Long, note: String?) {
         paymentDao.insert(PaymentEntity(orderId = orderId, amountCents = amountCents, note = note))
     }
+
+    suspend fun updatePayment(payment: PaymentEntity, amountCents: Long, note: String?) {
+        paymentDao.update(payment.copy(amountCents = amountCents, note = note))
+    }
+
+    suspend fun deletePayment(payment: PaymentEntity) {
+        paymentDao.delete(payment)
+    }
 }

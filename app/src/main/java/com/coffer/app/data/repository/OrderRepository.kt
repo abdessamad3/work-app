@@ -58,4 +58,38 @@ class OrderRepository @Inject constructor(
 
         orderId
     }
+
+    /** Only meaningful for a flat-total order; an itemized order's total always follows its line items. */
+    suspend fun updateFlatOrder(orderId: Int, totalAmountCents: Long, description: String?) {
+        val order = orderDao.getOrderByIdOnce(orderId) ?: return
+        orderDao.update(order.copy(totalAmountCents = totalAmountCents, description = description))
+    }
+
+    suspend fun addLineItem(orderId: Int, name: String, quantity: Int, unitPriceCents: Long) = database.withTransaction {
+        lineItemDao.insertAll(listOf(LineItemEntity(orderId = orderId, name = name, quantity = quantity, unitPriceCents = unitPriceCents)))
+        recalculateItemizedTotal(orderId)
+    }
+
+    suspend fun updateLineItem(item: LineItemEntity, name: String, quantity: Int, unitPriceCents: Long) = database.withTransaction {
+        lineItemDao.update(item.copy(name = name, quantity = quantity, unitPriceCents = unitPriceCents))
+        recalculateItemizedTotal(item.orderId)
+    }
+
+    suspend fun deleteLineItem(item: LineItemEntity) = database.withTransaction {
+        lineItemDao.delete(item)
+        recalculateItemizedTotal(item.orderId)
+    }
+
+    private suspend fun recalculateItemizedTotal(orderId: Int) {
+        val items = lineItemDao.getItemsForOrderOnce(orderId)
+        val order = orderDao.getOrderByIdOnce(orderId) ?: return
+        orderDao.update(order.copy(totalAmountCents = items.sumOf { it.quantity * it.unitPriceCents }))
+    }
+
+    /** Deletes the order along with its line items and payments. */
+    suspend fun deleteOrder(orderId: Int) = database.withTransaction {
+        lineItemDao.deleteAllForOrder(orderId)
+        paymentDao.deleteAllForOrder(orderId)
+        orderDao.getOrderByIdOnce(orderId)?.let { orderDao.delete(it) }
+    }
 }

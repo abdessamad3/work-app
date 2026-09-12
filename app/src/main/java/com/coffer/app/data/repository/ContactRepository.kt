@@ -17,4 +17,14 @@ class ContactRepository @Inject constructor(
     fun getContactById(contactId: Int): Flow<ContactEntity?> = contactDao.getContactById(contactId)
 
     suspend fun createContact(name: String, type: String): Int = contactDao.insert(ContactEntity(name = name, type = type)).toInt()
+
+    suspend fun renameContact(contactId: Int, newName: String) {
+        val contact = contactDao.getContactByIdOnce(contactId) ?: return
+        contactDao.update(contact.copy(name = newName))
+    }
+
+    suspend fun deleteContact(contactId: Int) {
+        val contact = contactDao.getContactByIdOnce(contactId) ?: return
+        contactDao.delete(contact)
+    }
 }

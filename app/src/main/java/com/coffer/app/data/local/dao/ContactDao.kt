@@ -1,8 +1,10 @@
 package com.coffer.app.data.local.dao
 
 import androidx.room.Dao
+import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.Query
+import androidx.room.Update
 import com.coffer.app.data.local.entity.ContactEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -11,6 +13,12 @@ interface ContactDao {
 
     @Insert
     suspend fun insert(contact: ContactEntity): Long
+
+    @Update
+    suspend fun update(contact: ContactEntity)
+
+    @Delete
+    suspend fun delete(contact: ContactEntity)
 
     @Query("SELECT * FROM contacts ORDER BY name ASC")
     fun getAllContacts(): Flow<List<ContactEntity>>

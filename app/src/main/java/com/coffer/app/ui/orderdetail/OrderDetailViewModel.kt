@@ -74,4 +74,47 @@ class OrderDetailViewModel @Inject constructor(
             paymentRepository.addPayment(orderId, amountCents, note)
         }
     }
+
+    fun updatePayment(payment: PaymentEntity, amountCents: Long, note: String?) {
+        viewModelScope.launch {
+            paymentRepository.updatePayment(payment, amountCents, note)
+        }
+    }
+
+    fun deletePayment(payment: PaymentEntity) {
+        viewModelScope.launch {
+            paymentRepository.deletePayment(payment)
+        }
+    }
+
+    fun updateFlatOrder(totalAmountCents: Long, description: String?) {
+        viewModelScope.launch {
+            orderRepository.updateFlatOrder(orderId, totalAmountCents, description)
+        }
+    }
+
+    fun addLineItem(name: String, quantity: Int, unitPriceCents: Long) {
+        viewModelScope.launch {
+            orderRepository.addLineItem(orderId, name, quantity, unitPriceCents)
+        }
+    }
+
+    fun updateLineItem(item: LineItemEntity, name: String, quantity: Int, unitPriceCents: Long) {
+        viewModelScope.launch {
+            orderRepository.updateLineItem(item, name, quantity, unitPriceCents)
+        }
+    }
+
+    fun deleteLineItem(item: LineItemEntity) {
+        viewModelScope.launch {
+            orderRepository.deleteLineItem(item)
+        }
+    }
+
+    fun deleteOrder(onDeleted: () -> Unit) {
+        viewModelScope.launch {
+            orderRepository.deleteOrder(orderId)
+            onDeleted()
+        }
+    }
 }
