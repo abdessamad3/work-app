@@ -1,6 +1,8 @@
 package com.coffer.app.ui.onboarding
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -67,25 +70,33 @@ fun OnboardingScreen(onGetStarted: () -> Unit) {
 
             Spacer(modifier = Modifier.height(36.dp))
 
-            GuideRow(
-                icon = Icons.Default.Add,
-                title = "Log an order",
-                body = "Tap + to record stock from a supplier or a sale to a client. Enter a total, or itemize it product by product."
-            )
-            Spacer(modifier = Modifier.height(20.dp))
-            GuideRow(
-                icon = Icons.Default.Edit,
-                title = "Pay it off over time",
-                body = "Add a payment whenever money changes hands — all of it now, or a little at a time. Tap any entry to fix a mistake."
-            )
-            Spacer(modifier = Modifier.height(20.dp))
-            GuideRow(
-                icon = Icons.Default.History,
-                title = "See where things stand",
-                body = "Dashboard shows your cash balance and what's owed. Activity is the full history, oldest mistakes and all correctable."
-            )
+            Column(
+                modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
+                GuideRow(
+                    icon = Icons.Default.Add,
+                    title = "Log an order",
+                    body = "Tap + to record stock from a supplier or a sale to a client. Enter a total, or itemize it product by product."
+                )
+                GuideRow(
+                    icon = Icons.Default.Inventory2,
+                    title = "Keep a product catalog",
+                    body = "Add products once from the Products tab, or on the fly while itemizing. Coffer tracks stock and remembers what you last charged each client."
+                )
+                GuideRow(
+                    icon = Icons.Default.Edit,
+                    title = "Pay it off over time",
+                    body = "Add a payment whenever money changes hands — all of it now, or a little at a time. Tap any entry to fix a mistake."
+                )
+                GuideRow(
+                    icon = Icons.Default.History,
+                    title = "See where things stand",
+                    body = "Dashboard shows your cash balance and what's owed. Activity is the full history, oldest mistakes and all correctable."
+                )
+            }
 
-            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.height(16.dp))
 
             Button(onClick = onGetStarted, modifier = Modifier.fillMaxWidth()) {
                 Text("Get started")
