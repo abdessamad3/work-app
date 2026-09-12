@@ -133,13 +133,25 @@ fun NewOrderScreen(
                 }
                 if (usingNewContact) {
                     Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = newContactName,
-                        onValueChange = { newContactName = it },
-                        label = { Text("New contact name") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = newContactName,
+                            onValueChange = { newContactName = it },
+                            label = { Text("New contact name") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+                        Button(
+                            onClick = {
+                                viewModel.createContact(newContactName, isPurchase) { newId ->
+                                    selectedContactId = newId
+                                    usingNewContact = false
+                                    newContactName = ""
+                                }
+                            },
+                            enabled = newContactName.isNotBlank()
+                        ) { Text("Add") }
+                    }
                 }
             }
 

@@ -40,6 +40,17 @@ class NewOrderViewModel @Inject constructor(
     private val _created = MutableSharedFlow<Int>()
     val created: SharedFlow<Int> = _created.asSharedFlow()
 
+    fun createContact(name: String, isPurchase: Boolean, onCreated: (Int) -> Unit) {
+        if (name.isBlank()) return
+        viewModelScope.launch {
+            val id = contactRepository.createContact(
+                name.trim(),
+                if (isPurchase) ContactType.SUPPLIER.name else ContactType.CLIENT.name
+            )
+            onCreated(id)
+        }
+    }
+
     fun submit(
         isPurchase: Boolean,
         existingContactId: Int?,
