@@ -7,11 +7,11 @@ plugins {
 }
 
 android {
-    namespace = "com.marketcredits.app"
+    namespace = "com.coffer.app"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.marketcredits.app"
+        applicationId = "com.coffer.app"
         minSdk = 26
         targetSdk = 34
         versionCode = 1
@@ -63,8 +63,6 @@ dependencies {
     implementation("com.google.dagger:hilt-android:2.51.1")
     ksp("com.google.dagger:hilt-android-compiler:2.51.1")
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
-
-    implementation("androidx.datastore:datastore-preferences:1.1.1")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

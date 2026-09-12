@@ -1,0 +1,242 @@
+package com.coffer.app.ui.neworder
+
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.coffer.app.data.local.entity.ContactType
+import com.coffer.app.domain.formatCents
+import kotlinx.coroutines.flow.collectLatest
+
+private data class ItemDraft(val id: Int, val name: String = "", val qty: String = "", val price: String = "")
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun NewOrderScreen(
+    onBack: () -> Unit,
+    onSaved: (Int) -> Unit,
+    viewModel: NewOrderViewModel = hiltViewModel()
+) {
+    val suppliers by viewModel.suppliers.collectAsState()
+    val clients by viewModel.clients.collectAsState()
+    val presetContact by viewModel.presetContact.collectAsState()
+
+    var isPurchase by remember { mutableStateOf(true) }
+    var selectedContactId by remember { mutableStateOf<Int?>(null) }
+    var usingNewContact by remember { mutableStateOf(false) }
+    var newContactName by remember { mutableStateOf("") }
+    var itemized by remember { mutableStateOf(false) }
+    var totalAmountText by remember { mutableStateOf("") }
+    var descriptionText by remember { mutableStateOf("") }
+    var paymentNowText by remember { mutableStateOf("") }
+    var errorText by remember { mutableStateOf<String?>(null) }
+    var nextItemId by remember { mutableIntStateOf(1) }
+    var items by remember { mutableStateOf(listOf(ItemDraft(0))) }
+
+    LaunchedEffect(presetContact) {
+        presetContact?.let { contact ->
+            isPurchase = contact.type == ContactType.SUPPLIER.name
+            selectedContactId = contact.id
+        }
+    }
+    LaunchedEffect(Unit) {
+        viewModel.created.collectLatest { onSaved(it) }
+    }
+
+    val contactOptions = if (isPurchase) suppliers else clients
+    val itemizedTotalCents = items.sumOf { (it.qty.toIntOrNull() ?: 0) * Math.round((it.price.toDoubleOrNull() ?: 0.0) * 100) }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("New order") },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") } }
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                SegmentedButton(
+                    selected = isPurchase,
+                    onClick = { isPurchase = true; selectedContactId = null; usingNewContact = false },
+                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                ) { Text("From a supplier") }
+                SegmentedButton(
+                    selected = !isPurchase,
+                    onClick = { isPurchase = false; selectedContactId = null; usingNewContact = false },
+                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                ) { Text("To a client") }
+            }
+
+            Column {
+                Text("Contact", style = MaterialTheme.typography.bodySmall)
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    contactOptions.forEach { contact ->
+                        FilterChip(
+                            selected = selectedContactId == contact.id,
+                            onClick = { selectedContactId = contact.id; usingNewContact = false },
+                            label = { Text(contact.name) }
+                        )
+                    }
+                    FilterChip(
+                        selected = usingNewContact,
+                        onClick = { usingNewContact = true; selectedContactId = null },
+                        label = { Text("+ New") }
+                    )
+                }
+                if (usingNewContact) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = newContactName,
+                        onValueChange = { newContactName = it },
+                        label = { Text("New contact name") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+            }
+
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                SegmentedButton(
+                    selected = !itemized,
+                    onClick = { itemized = false },
+                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                ) { Text("Total amount") }
+                SegmentedButton(
+                    selected = itemized,
+                    onClick = { itemized = true },
+                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                ) { Text("Itemized") }
+            }
+
+            if (!itemized) {
+                OutlinedTextField(
+                    value = totalAmountText,
+                    onValueChange = { totalAmountText = it },
+                    label = { Text("Total amount") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = descriptionText,
+                    onValueChange = { descriptionText = it },
+                    label = { Text("Description (optional)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items.forEachIndexed { index, draft ->
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            OutlinedTextField(
+                                value = draft.name,
+                                onValueChange = { v -> items = items.toMutableList().also { it[index] = it[index].copy(name = v) } },
+                                label = { Text("Product") },
+                                modifier = Modifier.weight(2f),
+                                singleLine = true
+                            )
+                            OutlinedTextField(
+                                value = draft.qty,
+                                onValueChange = { v -> items = items.toMutableList().also { it[index] = it[index].copy(qty = v) } },
+                                label = { Text("Qty") },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true
+                            )
+                            OutlinedTextField(
+                                value = draft.price,
+                                onValueChange = { v -> items = items.toMutableList().also { it[index] = it[index].copy(price = v) } },
+                                label = { Text("Price") },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true
+                            )
+                            IconButton(onClick = {
+                                items = items.filterIndexed { i, _ -> i != index }.ifEmpty { listOf(ItemDraft(nextItemId++)) }
+                            }) { Icon(Icons.Default.Close, contentDescription = "Remove item") }
+                        }
+                    }
+                    OutlinedButton(onClick = { items = items + ItemDraft(nextItemId++) }, modifier = Modifier.fillMaxWidth()) {
+                        Text("+ Add item")
+                    }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("Order total", style = MaterialTheme.typography.bodyMedium)
+                        Text(formatCents(itemizedTotalCents), style = MaterialTheme.typography.titleMedium)
+                    }
+                }
+            }
+
+            OutlinedTextField(
+                value = paymentNowText,
+                onValueChange = { paymentNowText = it },
+                label = { Text("Payment now (optional)") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+
+            errorText?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+
+            Button(
+                onClick = {
+                    viewModel.submit(
+                        isPurchase = isPurchase,
+                        existingContactId = selectedContactId,
+                        newContactName = newContactName,
+                        itemized = itemized,
+                        totalAmountText = totalAmountText,
+                        description = descriptionText,
+                        items = items.map { Triple(it.name, it.qty, it.price) },
+                        paymentNowText = paymentNowText,
+                        onError = { errorText = it }
+                    )
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Save order") }
+        }
+    }
+}
