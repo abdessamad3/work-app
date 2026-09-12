@@ -3,6 +3,9 @@ name: Build Debug APK
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -20,8 +23,19 @@ jobs:
       - name: Build debug APK
         run: ./gradlew assembleDebug --stacktrace
 
-      - name: Upload APK
+      - name: Upload APK as build artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Publish APK to a downloadable release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: debug-apk-latest
+          name: Debug APK (latest)
+          body: |
+            Automatically built debug APK from `${{ github.ref_name }}` (commit ${{ github.sha }}).
+            For testing only — not signed for release.
+          prerelease: true
+          files: app/build/outputs/apk/debug/app-debug.apk
