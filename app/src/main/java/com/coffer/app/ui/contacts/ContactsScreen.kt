@@ -9,8 +9,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
@@ -43,7 +47,12 @@ fun ContactsScreen(
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("Contacts") }) },
-        bottomBar = { CofferBottomBar(currentRoute = Routes.CONTACTS, onNavigate = onNavigate) }
+        bottomBar = { CofferBottomBar(currentRoute = Routes.CONTACTS, onNavigate = onNavigate) },
+        floatingActionButton = {
+            FloatingActionButton(onClick = { onNavigate(Routes.newOrder()) }) {
+                Icon(Icons.Default.Add, contentDescription = "New order")
+            }
+        }
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
@@ -60,8 +69,15 @@ fun ContactsScreen(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                items(uiState.rows, key = { it.contact.id }) { row ->
-                    ContactRowCard(row = row, isSupplier = uiState.filterType == ContactType.SUPPLIER.name, onClick = { onOpenContact(row.contact.id) })
+                if (uiState.rows.isEmpty()) {
+                    item {
+                        val kind = if (uiState.filterType == ContactType.SUPPLIER.name) "suppliers" else "clients"
+                        Text("No $kind yet — add one from + New order.", style = MaterialTheme.typography.bodySmall)
+                    }
+                } else {
+                    items(uiState.rows, key = { it.contact.id }) { row ->
+                        ContactRowCard(row = row, isSupplier = uiState.filterType == ContactType.SUPPLIER.name, onClick = { onOpenContact(row.contact.id) })
+                    }
                 }
             }
         }

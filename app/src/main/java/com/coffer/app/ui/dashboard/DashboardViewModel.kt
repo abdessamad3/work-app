@@ -15,7 +15,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
-private const val OPENING_BALANCE_CENTS = 500_000L
+/** A fresh install starts at zero cash — every dollar from here on comes from a real logged payment. */
+private const val OPENING_BALANCE_CENTS = 0L
 
 sealed interface ActivityEntry {
     val timestamp: Long

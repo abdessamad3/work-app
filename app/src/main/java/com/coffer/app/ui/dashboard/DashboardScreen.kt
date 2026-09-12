@@ -43,7 +43,7 @@ fun DashboardScreen(
         topBar = {
             TopAppBar(title = {
                 Column {
-                    Text("Cedar Hardware Co.")
+                    Text("Coffer")
                     Text(formatCents(uiState.cashBalanceCents), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 }
             })
@@ -67,8 +67,17 @@ fun DashboardScreen(
                 }
             }
             item { Text("Recent activity", style = MaterialTheme.typography.titleMedium) }
-            items(uiState.recentActivity, key = { it.timestamp.toString() + it.orderId }) { entry ->
-                ActivityEntryRow(entry, onClick = { onOpenOrder(entry.orderId) })
+            if (uiState.recentActivity.isEmpty()) {
+                item {
+                    Text(
+                        "Nothing yet — tap + to log your first order.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            } else {
+                items(uiState.recentActivity, key = { it.timestamp.toString() + it.orderId }) { entry ->
+                    ActivityEntryRow(entry, onClick = { onOpenOrder(entry.orderId) })
+                }
             }
         }
     }

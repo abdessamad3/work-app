@@ -1,0 +1,30 @@
+<!-- A ledger page with a coin: what Coffer actually is, a money ledger. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- ledger page -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M24,23 L64,23 L64,85 L24,85 Z" />
+    <!-- ruled lines -->
+    <path
+        android:fillColor="#1F6F5C"
+        android:pathData="M30,36 L58,36 L58,40 L30,40 Z" />
+    <path
+        android:fillColor="#1F6F5C"
+        android:pathData="M30,48 L58,48 L58,52 L30,52 Z" />
+    <path
+        android:fillColor="#1F6F5C"
+        android:pathData="M30,60 L58,60 L58,64 L30,64 Z" />
+    <!-- coin -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M61,73 A12,12 0 1,0 85,73 A12,12 0 1,0 61,73 Z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#1F6F5C"
+        android:strokeWidth="3"
+        android:pathData="M66,73 A7,7 0 1,0 80,73 A7,7 0 1,0 66,73 Z" />
+</vector>
