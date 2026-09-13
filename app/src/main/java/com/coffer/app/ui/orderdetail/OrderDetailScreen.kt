@@ -119,7 +119,7 @@ fun OrderDetailScreen(
 
             if (order.itemized) {
                 item { Text("Items", style = MaterialTheme.typography.titleMedium) }
-                items(uiState.items, key = { it.id }) { lineItem ->
+                items(uiState.items, key = { "item-${it.id}" }) { lineItem ->
                     Card(onClick = { itemDialogTarget = lineItem }, modifier = Modifier.fillMaxWidth()) {
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(12.dp),
@@ -148,7 +148,7 @@ fun OrderDetailScreen(
             if (uiState.payments.isEmpty()) {
                 item { Text("No payments recorded yet.", style = MaterialTheme.typography.bodySmall) }
             } else {
-                items(uiState.payments, key = { it.id }) { payment ->
+                items(uiState.payments, key = { "payment-${it.id}" }) { payment ->
                     Card(onClick = { paymentDialogTarget = payment }, modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text(formatCents(payment.amountCents), fontWeight = FontWeight.Bold)
