@@ -5,6 +5,7 @@ object Routes {
     const val CONTACTS = "contacts"
     const val PRODUCTS = "products"
     const val ACTIVITY = "activity"
+    const val SETTINGS = "settings"
     const val CONTACT_DETAIL = "contactDetail/{contactId}"
     const val ORDER_DETAIL = "orderDetail/{orderId}"
     const val NEW_ORDER = "newOrder?contactId={contactId}"

@@ -7,6 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -14,10 +15,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.coffer.app.domain.LocalCurrency
 import com.coffer.app.ui.crash.CrashScreen
 import com.coffer.app.ui.navigation.CofferNavGraph
 import com.coffer.app.ui.onboarding.OnboardingScreen
 import com.coffer.app.ui.onboarding.OnboardingViewModel
+import com.coffer.app.ui.settings.SettingsViewModel
 import com.coffer.app.ui.theme.CofferTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -45,7 +48,13 @@ class MainActivity : ComponentActivity() {
                         when (hasSeenOnboarding) {
                             null -> Unit
                             false -> OnboardingScreen(onGetStarted = onboardingViewModel::markSeen)
-                            true -> CofferNavGraph()
+                            true -> {
+                                val settingsViewModel: SettingsViewModel = hiltViewModel()
+                                val currency by settingsViewModel.currency.collectAsState()
+                                CompositionLocalProvider(LocalCurrency provides currency) {
+                                    CofferNavGraph()
+                                }
+                            }
                         }
                     }
                 }
