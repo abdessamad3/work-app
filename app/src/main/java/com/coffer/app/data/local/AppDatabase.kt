@@ -15,7 +15,7 @@ import com.coffer.app.data.local.entity.ProductEntity
 
 @Database(
     entities = [ContactEntity::class, OrderEntity::class, LineItemEntity::class, PaymentEntity::class, ProductEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

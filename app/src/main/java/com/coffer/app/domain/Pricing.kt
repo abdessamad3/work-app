@@ -38,5 +38,8 @@ fun suggestPriceFor(productId: Int, contactId: Int, lineItems: List<LineItemEnti
         ?.let { SuggestedPrice(it.listUnitPriceCents, it.discountPercent) }
 }
 
-fun defaultPriceFor(productId: Int, products: List<ProductEntity>): Long =
-    products.find { it.id == productId }?.defaultUnitPriceCents ?: 0
+/** The product's own buy or sell price, before checking for any per-client history. */
+fun defaultPriceFor(productId: Int, products: List<ProductEntity>, isPurchase: Boolean): Long {
+    val product = products.find { it.id == productId } ?: return 0
+    return if (isPurchase) product.buyPriceCents else product.sellPriceCents
+}

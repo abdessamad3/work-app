@@ -13,6 +13,7 @@ import com.coffer.app.data.repository.NewLineItem
 import com.coffer.app.data.repository.OrderRepository
 import com.coffer.app.data.repository.ProductRepository
 import com.coffer.app.domain.SuggestedPrice
+import com.coffer.app.domain.defaultPriceFor
 import com.coffer.app.domain.effectiveUnitPriceCents
 import com.coffer.app.domain.suggestPriceFor
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -75,17 +76,17 @@ class NewOrderViewModel @Inject constructor(
         }
     }
 
-    fun createProduct(name: String, defaultPriceCents: Long, onCreated: (Int) -> Unit) {
-        if (name.isBlank() || defaultPriceCents <= 0) return
+    fun createProduct(name: String, buyPriceCents: Long, sellPriceCents: Long, onCreated: (Int) -> Unit) {
+        if (name.isBlank() || buyPriceCents <= 0 || sellPriceCents <= 0) return
         viewModelScope.launch {
-            val id = productRepository.createProduct(name.trim(), defaultPriceCents)
+            val id = productRepository.createProduct(name.trim(), buyPriceCents, sellPriceCents)
             onCreated(id)
         }
     }
 
-    /** What you last charged (or paid) this contact for this product, if anything; else the product's default. */
-    fun suggestedPriceFor(productId: Int, contactId: Int?): SuggestedPrice {
-        val fallback = SuggestedPrice(products.value.find { it.id == productId }?.defaultUnitPriceCents ?: 0, 0)
+    /** What you last charged (or paid) this contact for this product, if anything; else the product's buy/sell price. */
+    fun suggestedPriceFor(productId: Int, contactId: Int?, isPurchase: Boolean): SuggestedPrice {
+        val fallback = SuggestedPrice(defaultPriceFor(productId, products.value, isPurchase), 0)
         if (contactId == null) return fallback
         return suggestPriceFor(productId, contactId, allLineItems.value, allOrders.value) ?: fallback
     }

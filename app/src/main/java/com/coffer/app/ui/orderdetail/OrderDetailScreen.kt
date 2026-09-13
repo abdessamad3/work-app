@@ -44,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.coffer.app.data.local.entity.ContactType
 import com.coffer.app.data.local.entity.LineItemEntity
 import com.coffer.app.data.local.entity.PaymentEntity
 import com.coffer.app.data.local.entity.ProductEntity
@@ -203,6 +204,8 @@ fun OrderDetailScreen(
             )
         }
 
+        val isPurchase = uiState.contact?.type == ContactType.SUPPLIER.name
+
         if (showAddItemDialog) {
             LineItemDialog(
                 title = "Add item",
@@ -211,7 +214,8 @@ fun OrderDetailScreen(
                 initialQty = "",
                 initialListPrice = "",
                 initialDiscountPercent = "0",
-                onCreateProduct = { name, priceCents, onCreated -> viewModel.createProduct(name, priceCents, onCreated) },
+                isPurchase = isPurchase,
+                onCreateProduct = { name, buyCents, sellCents, onCreated -> viewModel.createProduct(name, buyCents, sellCents, onCreated) },
                 onSuggestPrice = { productId -> viewModel.suggestedPriceFor(productId) },
                 onDismiss = { showAddItemDialog = false },
                 onSave = { productId, qty, listPriceCents, discount ->
@@ -230,7 +234,8 @@ fun OrderDetailScreen(
                 initialQty = item.quantity.toString(),
                 initialListPrice = String.format("%.2f", item.listUnitPriceCents / 100.0),
                 initialDiscountPercent = item.discountPercent.toString(),
-                onCreateProduct = { name, priceCents, onCreated -> viewModel.createProduct(name, priceCents, onCreated) },
+                isPurchase = isPurchase,
+                onCreateProduct = { name, buyCents, sellCents, onCreated -> viewModel.createProduct(name, buyCents, sellCents, onCreated) },
                 onSuggestPrice = { productId -> viewModel.suggestedPriceFor(productId) },
                 onDismiss = { itemDialogTarget = null },
                 onSave = { productId, qty, listPriceCents, discount ->
@@ -323,7 +328,8 @@ private fun LineItemDialog(
     initialQty: String,
     initialListPrice: String,
     initialDiscountPercent: String,
-    onCreateProduct: (String, Long, (Int) -> Unit) -> Unit,
+    isPurchase: Boolean,
+    onCreateProduct: (String, Long, Long, (Int) -> Unit) -> Unit,
     onSuggestPrice: (Int) -> SuggestedPrice,
     onDismiss: () -> Unit,
     onSave: (Int, Int, Long, Int) -> Unit,
@@ -332,7 +338,8 @@ private fun LineItemDialog(
     var selectedProductId by remember { mutableStateOf(initialProductId) }
     var usingNewProduct by remember { mutableStateOf(false) }
     var newProductName by remember { mutableStateOf("") }
-    var newProductPrice by remember { mutableStateOf("") }
+    var newProductBuyPrice by remember { mutableStateOf("") }
+    var newProductSellPrice by remember { mutableStateOf("") }
     var qty by remember { mutableStateOf(initialQty) }
     var listPrice by remember { mutableStateOf(initialListPrice) }
     var discountPercent by remember { mutableStateOf(initialDiscountPercent) }
@@ -378,25 +385,37 @@ private fun LineItemDialog(
                     Spacer(modifier = Modifier.height(8.dp))
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedTextField(
-                            value = newProductPrice,
-                            onValueChange = { newProductPrice = it },
-                            label = { Text("Default price") },
+                            value = newProductBuyPrice,
+                            onValueChange = { newProductBuyPrice = it },
+                            label = { Text("Buy price") },
                             singleLine = true,
                             modifier = Modifier.weight(1f)
                         )
-                        Button(
-                            enabled = newProductName.isNotBlank() && (newProductPrice.toDoubleOrNull() ?: 0.0) > 0,
-                            onClick = {
-                                val priceCents = Math.round((newProductPrice.toDoubleOrNull() ?: 0.0) * 100)
-                                onCreateProduct(newProductName, priceCents) { newId ->
-                                    selectedProductId = newId
-                                    usingNewProduct = false
-                                    listPrice = newProductPrice
-                                    discountPercent = "0"
-                                }
-                            }
-                        ) { Text("Add") }
+                        OutlinedTextField(
+                            value = newProductSellPrice,
+                            onValueChange = { newProductSellPrice = it },
+                            label = { Text("Sell price") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
                     }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        enabled = newProductName.isNotBlank() &&
+                            (newProductBuyPrice.toDoubleOrNull() ?: 0.0) > 0 &&
+                            (newProductSellPrice.toDoubleOrNull() ?: 0.0) > 0,
+                        onClick = {
+                            val buyCents = Math.round((newProductBuyPrice.toDoubleOrNull() ?: 0.0) * 100)
+                            val sellCents = Math.round((newProductSellPrice.toDoubleOrNull() ?: 0.0) * 100)
+                            onCreateProduct(newProductName, buyCents, sellCents) { newId ->
+                                selectedProductId = newId
+                                usingNewProduct = false
+                                listPrice = if (isPurchase) newProductBuyPrice else newProductSellPrice
+                                discountPercent = "0"
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Add") }
                 } else if (selectedProduct != null) {
                     Text(selectedProduct.name, fontWeight = FontWeight.Bold)
                 }

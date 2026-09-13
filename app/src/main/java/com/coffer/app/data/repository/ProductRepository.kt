@@ -12,11 +12,11 @@ class ProductRepository @Inject constructor(
 ) {
     fun getAllProducts(): Flow<List<ProductEntity>> = productDao.getAllProducts()
 
-    suspend fun createProduct(name: String, defaultUnitPriceCents: Long): Int =
-        productDao.insert(ProductEntity(name = name, defaultUnitPriceCents = defaultUnitPriceCents)).toInt()
+    suspend fun createProduct(name: String, buyPriceCents: Long, sellPriceCents: Long): Int =
+        productDao.insert(ProductEntity(name = name, buyPriceCents = buyPriceCents, sellPriceCents = sellPriceCents)).toInt()
 
-    suspend fun updateProduct(product: ProductEntity, name: String, defaultUnitPriceCents: Long) {
-        productDao.update(product.copy(name = name, defaultUnitPriceCents = defaultUnitPriceCents))
+    suspend fun updateProduct(product: ProductEntity, name: String, buyPriceCents: Long, sellPriceCents: Long) {
+        productDao.update(product.copy(name = name, buyPriceCents = buyPriceCents, sellPriceCents = sellPriceCents))
     }
 
     suspend fun deleteProduct(product: ProductEntity) {

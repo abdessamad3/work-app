@@ -83,10 +83,11 @@ fun ProductsScreen(
         ProductDialog(
             title = "New product",
             initialName = "",
-            initialPrice = "",
+            initialBuyPrice = "",
+            initialSellPrice = "",
             onDismiss = { showAddDialog = false },
-            onSave = { name, priceCents ->
-                viewModel.createProduct(name, priceCents)
+            onSave = { name, buyCents, sellCents ->
+                viewModel.createProduct(name, buyCents, sellCents)
                 showAddDialog = false
             },
             onDelete = null
@@ -97,11 +98,12 @@ fun ProductsScreen(
         ProductDialog(
             title = "Edit product",
             initialName = row.product.name,
-            initialPrice = String.format("%.2f", row.product.defaultUnitPriceCents / 100.0),
+            initialBuyPrice = String.format("%.2f", row.product.buyPriceCents / 100.0),
+            initialSellPrice = String.format("%.2f", row.product.sellPriceCents / 100.0),
             deleteBlockedMessage = if (!row.canDelete) "This product is used in an order and can't be deleted." else null,
             onDismiss = { editTarget = null },
-            onSave = { name, priceCents ->
-                viewModel.updateProduct(row.product, name, priceCents)
+            onSave = { name, buyCents, sellCents ->
+                viewModel.updateProduct(row.product, name, buyCents, sellCents)
                 editTarget = null
             },
             onDelete = {
@@ -121,7 +123,10 @@ private fun ProductRowCard(row: ProductRow, onClick: () -> Unit) {
         ) {
             Column {
                 Text(row.product.name, fontWeight = FontWeight.Bold)
-                Text(formatCents(row.product.defaultUnitPriceCents) + " default", style = MaterialTheme.typography.bodySmall)
+                Text(
+                    "Buy ${formatCents(row.product.buyPriceCents)} · Sell ${formatCents(row.product.sellPriceCents)}",
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
             Column(horizontalAlignment = Alignment.End) {
                 Text(
@@ -138,14 +143,16 @@ private fun ProductRowCard(row: ProductRow, onClick: () -> Unit) {
 private fun ProductDialog(
     title: String,
     initialName: String,
-    initialPrice: String,
+    initialBuyPrice: String,
+    initialSellPrice: String,
     deleteBlockedMessage: String? = null,
     onDismiss: () -> Unit,
-    onSave: (String, Long) -> Unit,
+    onSave: (String, Long, Long) -> Unit,
     onDelete: (() -> Unit)?
 ) {
     var name by remember { mutableStateOf(initialName) }
-    var price by remember { mutableStateOf(initialPrice) }
+    var buyPrice by remember { mutableStateOf(initialBuyPrice) }
+    var sellPrice by remember { mutableStateOf(initialSellPrice) }
     var error by remember { mutableStateOf<String?>(null) }
 
     AlertDialog(
@@ -155,17 +162,20 @@ private fun ProductDialog(
             Column {
                 OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Name") }, singleLine = true)
                 Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(value = price, onValueChange = { price = it }, label = { Text("Default price") }, singleLine = true)
+                OutlinedTextField(value = buyPrice, onValueChange = { buyPrice = it }, label = { Text("Buy price (from supplier)") }, singleLine = true)
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(value = sellPrice, onValueChange = { sellPrice = it }, label = { Text("Sell price (to client)") }, singleLine = true)
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             }
         },
         confirmButton = {
             TextButton(onClick = {
-                val priceValue = price.toDoubleOrNull()
-                if (name.isBlank() || priceValue == null || priceValue <= 0) {
-                    error = "Enter a name and a price greater than 0."
+                val buyValue = buyPrice.toDoubleOrNull()
+                val sellValue = sellPrice.toDoubleOrNull()
+                if (name.isBlank() || buyValue == null || buyValue <= 0 || sellValue == null || sellValue <= 0) {
+                    error = "Enter a name and buy/sell prices greater than 0."
                 } else {
-                    onSave(name.trim(), Math.round(priceValue * 100))
+                    onSave(name.trim(), Math.round(buyValue * 100), Math.round(sellValue * 100))
                 }
             }) { Text("Save") }
         },

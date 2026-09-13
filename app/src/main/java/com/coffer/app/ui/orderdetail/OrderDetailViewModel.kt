@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.coffer.app.data.local.entity.ContactEntity
+import com.coffer.app.data.local.entity.ContactType
 import com.coffer.app.data.local.entity.LineItemEntity
 import com.coffer.app.data.local.entity.OrderEntity
 import com.coffer.app.data.local.entity.PaymentEntity
@@ -15,6 +16,7 @@ import com.coffer.app.data.repository.ProductRepository
 import com.coffer.app.domain.OrderStatus
 import com.coffer.app.domain.SuggestedPrice
 import com.coffer.app.domain.computeOrder
+import com.coffer.app.domain.defaultPriceFor
 import com.coffer.app.domain.suggestPriceFor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -83,15 +85,16 @@ class OrderDetailViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun suggestedPriceFor(productId: Int): SuggestedPrice {
-        val fallback = SuggestedPrice(products.value.find { it.id == productId }?.defaultUnitPriceCents ?: 0, 0)
+        val isPurchase = uiState.value.contact?.type == ContactType.SUPPLIER.name
+        val fallback = SuggestedPrice(defaultPriceFor(productId, products.value, isPurchase), 0)
         val contactId = uiState.value.order?.contactId ?: return fallback
         return suggestPriceFor(productId, contactId, allLineItems.value, allOrders.value) ?: fallback
     }
 
-    fun createProduct(name: String, defaultPriceCents: Long, onCreated: (Int) -> Unit) {
-        if (name.isBlank() || defaultPriceCents <= 0) return
+    fun createProduct(name: String, buyPriceCents: Long, sellPriceCents: Long, onCreated: (Int) -> Unit) {
+        if (name.isBlank() || buyPriceCents <= 0 || sellPriceCents <= 0) return
         viewModelScope.launch {
-            val id = productRepository.createProduct(name.trim(), defaultPriceCents)
+            val id = productRepository.createProduct(name.trim(), buyPriceCents, sellPriceCents)
             onCreated(id)
         }
     }

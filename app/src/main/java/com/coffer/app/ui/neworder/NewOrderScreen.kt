@@ -52,7 +52,8 @@ private data class ItemDraft(
     val productId: Int? = null,
     val usingNewProduct: Boolean = false,
     val newProductName: String = "",
-    val newProductPrice: String = "",
+    val newProductBuyPrice: String = "",
+    val newProductSellPrice: String = "",
     val qty: String = "",
     val listPrice: String = "",
     val discountPercent: String = "0"
@@ -229,7 +230,7 @@ fun NewOrderScreen(
                                             FilterChip(
                                                 selected = false,
                                                 onClick = {
-                                                    val suggestion = viewModel.suggestedPriceFor(product.id, selectedContactId)
+                                                    val suggestion = viewModel.suggestedPriceFor(product.id, selectedContactId, isPurchase)
                                                     items = items.toMutableList().also {
                                                         it[index] = it[index].copy(
                                                             productId = product.id,
@@ -248,36 +249,50 @@ fun NewOrderScreen(
                                         )
                                     }
                                 } else if (draft.usingNewProduct) {
-                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                         OutlinedTextField(
                                             value = draft.newProductName,
                                             onValueChange = { v -> items = items.toMutableList().also { it[index] = it[index].copy(newProductName = v) } },
                                             label = { Text("Product name") },
-                                            modifier = Modifier.weight(1f),
+                                            modifier = Modifier.fillMaxWidth(),
                                             singleLine = true
                                         )
-                                        OutlinedTextField(
-                                            value = draft.newProductPrice,
-                                            onValueChange = { v -> items = items.toMutableList().also { it[index] = it[index].copy(newProductPrice = v) } },
-                                            label = { Text("Default price") },
-                                            modifier = Modifier.weight(1f),
-                                            singleLine = true
-                                        )
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            OutlinedTextField(
+                                                value = draft.newProductBuyPrice,
+                                                onValueChange = { v -> items = items.toMutableList().also { it[index] = it[index].copy(newProductBuyPrice = v) } },
+                                                label = { Text("Buy price") },
+                                                modifier = Modifier.weight(1f),
+                                                singleLine = true
+                                            )
+                                            OutlinedTextField(
+                                                value = draft.newProductSellPrice,
+                                                onValueChange = { v -> items = items.toMutableList().also { it[index] = it[index].copy(newProductSellPrice = v) } },
+                                                label = { Text("Sell price") },
+                                                modifier = Modifier.weight(1f),
+                                                singleLine = true
+                                            )
+                                        }
                                         Button(
-                                            enabled = draft.newProductName.isNotBlank() && (draft.newProductPrice.toDoubleOrNull() ?: 0.0) > 0,
+                                            enabled = draft.newProductName.isNotBlank() &&
+                                                (draft.newProductBuyPrice.toDoubleOrNull() ?: 0.0) > 0 &&
+                                                (draft.newProductSellPrice.toDoubleOrNull() ?: 0.0) > 0,
                                             onClick = {
-                                                val priceCents = Math.round((draft.newProductPrice.toDoubleOrNull() ?: 0.0) * 100)
-                                                viewModel.createProduct(draft.newProductName, priceCents) { newProductId ->
+                                                val buyCents = Math.round((draft.newProductBuyPrice.toDoubleOrNull() ?: 0.0) * 100)
+                                                val sellCents = Math.round((draft.newProductSellPrice.toDoubleOrNull() ?: 0.0) * 100)
+                                                viewModel.createProduct(draft.newProductName, buyCents, sellCents) { newProductId ->
+                                                    val priceText = if (isPurchase) draft.newProductBuyPrice else draft.newProductSellPrice
                                                     items = items.toMutableList().also {
                                                         it[index] = it[index].copy(
                                                             productId = newProductId,
                                                             usingNewProduct = false,
-                                                            listPrice = draft.newProductPrice,
+                                                            listPrice = priceText,
                                                             discountPercent = "0"
                                                         )
                                                     }
                                                 }
-                                            }
+                                            },
+                                            modifier = Modifier.fillMaxWidth()
                                         ) { Text("Add") }
                                     }
                                 } else if (selectedProduct != null) {
