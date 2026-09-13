@@ -41,6 +41,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.coffer.app.data.local.entity.ContactType
 import com.coffer.app.domain.OrderComputed
 import com.coffer.app.domain.formatCents
+import com.coffer.app.domain.formatDate
 import com.coffer.app.ui.components.StatusChip
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -169,6 +170,7 @@ private fun OrderRow(computed: OrderComputed, onClick: () -> Unit) {
         ) {
             Column {
                 Text(computed.order.description ?: "Itemized order", fontWeight = FontWeight.Bold)
+                Text(formatDate(computed.order.createdAt), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Column(horizontalAlignment = Alignment.End) {
                 StatusChip(computed.status)

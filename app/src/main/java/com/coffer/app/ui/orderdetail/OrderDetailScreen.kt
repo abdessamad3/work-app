@@ -50,6 +50,7 @@ import com.coffer.app.data.local.entity.ProductEntity
 import com.coffer.app.domain.OrderStatus
 import com.coffer.app.domain.SuggestedPrice
 import com.coffer.app.domain.formatCents
+import com.coffer.app.domain.formatDate
 import com.coffer.app.domain.lineTotalCents
 import com.coffer.app.ui.components.StatusChip
 
@@ -102,6 +103,7 @@ fun OrderDetailScreen(
                             Column {
                                 Text(formatCents(order.totalAmountCents), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                                 Text(order.description ?: "Itemized order", style = MaterialTheme.typography.bodySmall)
+                                Text(formatDate(order.createdAt), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             StatusChip(uiState.status)
                         }
@@ -153,6 +155,7 @@ fun OrderDetailScreen(
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text(formatCents(payment.amountCents), fontWeight = FontWeight.Bold)
                             payment.note?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                            Text(formatDate(payment.paidAt), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }

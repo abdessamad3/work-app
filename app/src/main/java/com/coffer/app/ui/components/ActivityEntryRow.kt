@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.coffer.app.domain.formatCents
+import com.coffer.app.domain.formatDate
 import com.coffer.app.ui.dashboard.ActivityEntry
 
 @Composable
@@ -28,6 +29,7 @@ fun ActivityEntryRow(entry: ActivityEntry, onClick: () -> Unit) {
                     Text("${entry.label} · $sign${formatCents(entry.amountCents)}", style = MaterialTheme.typography.bodySmall)
                 }
             }
+            Text(formatDate(entry.timestamp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
