@@ -38,3 +38,19 @@ fun totalOwedByType(type: String, orders: List<OrderEntity>, payments: List<Paym
         .filter { contactById[it.contactId]?.type == type }
         .sumOf { computeOrder(it, payments).remainingCents }
 }
+
+/** Total value of every order of this type, regardless of how much has been paid yet. */
+fun totalOrderValueByType(type: String, orders: List<OrderEntity>, contacts: List<ContactEntity>): Long {
+    val contactById = contacts.associateBy { it.id }
+    return orders
+        .filter { contactById[it.contactId]?.type == type }
+        .sumOf { it.totalAmountCents }
+}
+
+/** Chiffre d'affaires: total value sold to clients, whether or not it's been collected yet. */
+fun revenueCents(orders: List<OrderEntity>, contacts: List<ContactEntity>): Long =
+    totalOrderValueByType(ContactType.CLIENT.name, orders, contacts)
+
+/** Revenue minus what was paid to suppliers for the goods behind it — a gross profit, not a cash figure. */
+fun profitCents(orders: List<OrderEntity>, contacts: List<ContactEntity>): Long =
+    revenueCents(orders, contacts) - totalOrderValueByType(ContactType.SUPPLIER.name, orders, contacts)

@@ -3,6 +3,7 @@ package com.coffer.app.ui.dashboard
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -22,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -62,8 +64,20 @@ fun DashboardScreen(
         ) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    StatCard(label = "You owe suppliers", value = formatCents(uiState.owedToSuppliersCents))
-                    StatCard(label = "Clients owe you", value = formatCents(uiState.owedByClientsCents))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        StatCard(label = "You owe suppliers", value = formatCents(uiState.owedToSuppliersCents), modifier = Modifier.weight(1f))
+                        StatCard(label = "Clients owe you", value = formatCents(uiState.owedByClientsCents), modifier = Modifier.weight(1f))
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        StatCard(label = "Chiffre d'affaires", value = formatCents(uiState.revenueCents), modifier = Modifier.weight(1f))
+                        val profitText = (if (uiState.profitCents < 0) "−" else "") + formatCents(uiState.profitCents)
+                        StatCard(
+                            label = "Profit",
+                            value = profitText,
+                            valueColor = if (uiState.profitCents >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
             }
             item { Text("Recent activity", style = MaterialTheme.typography.titleMedium) }
@@ -84,11 +98,16 @@ fun DashboardScreen(
 }
 
 @Composable
-private fun StatCard(label: String, value: String) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+private fun StatCard(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    valueColor: Color = MaterialTheme.colorScheme.onSurface
+) {
+    Card(modifier = modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(14.dp)) {
             Text(label, style = MaterialTheme.typography.bodySmall)
-            Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = valueColor)
         }
     }
 }

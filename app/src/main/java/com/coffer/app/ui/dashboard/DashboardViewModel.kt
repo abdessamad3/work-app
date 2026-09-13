@@ -7,6 +7,8 @@ import com.coffer.app.data.repository.ContactRepository
 import com.coffer.app.data.repository.OrderRepository
 import com.coffer.app.data.repository.PaymentRepository
 import com.coffer.app.domain.cashBalanceCents
+import com.coffer.app.domain.profitCents
+import com.coffer.app.domain.revenueCents
 import com.coffer.app.domain.totalOwedByType
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -44,6 +46,8 @@ data class DashboardUiState(
     val cashBalanceCents: Long = 0,
     val owedToSuppliersCents: Long = 0,
     val owedByClientsCents: Long = 0,
+    val revenueCents: Long = 0,
+    val profitCents: Long = 0,
     val recentActivity: List<ActivityEntry> = emptyList()
 )
 
@@ -89,6 +93,8 @@ class DashboardViewModel @Inject constructor(
             cashBalanceCents = cashBalanceCents(OPENING_BALANCE_CENTS, orders, payments, contacts),
             owedToSuppliersCents = totalOwedByType(ContactType.SUPPLIER.name, orders, payments, contacts),
             owedByClientsCents = totalOwedByType(ContactType.CLIENT.name, orders, payments, contacts),
+            revenueCents = revenueCents(orders, contacts),
+            profitCents = profitCents(orders, contacts),
             recentActivity = (orderEvents + paymentEvents).sortedByDescending { it.timestamp }.take(6)
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DashboardUiState())
