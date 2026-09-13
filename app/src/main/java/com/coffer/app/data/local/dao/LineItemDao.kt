@@ -23,6 +23,9 @@ interface LineItemDao {
     @Query("DELETE FROM line_items WHERE orderId = :orderId")
     suspend fun deleteAllForOrder(orderId: Int)
 
+    @Query("DELETE FROM line_items")
+    suspend fun deleteAll()
+
     @Query("SELECT * FROM line_items WHERE orderId = :orderId")
     fun getItemsForOrder(orderId: Int): Flow<List<LineItemEntity>>
 

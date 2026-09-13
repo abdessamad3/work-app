@@ -14,11 +14,17 @@ interface ContactDao {
     @Insert
     suspend fun insert(contact: ContactEntity): Long
 
+    @Insert
+    suspend fun insertAll(contacts: List<ContactEntity>)
+
     @Update
     suspend fun update(contact: ContactEntity)
 
     @Delete
     suspend fun delete(contact: ContactEntity)
+
+    @Query("DELETE FROM contacts")
+    suspend fun deleteAll()
 
     @Query("SELECT * FROM contacts ORDER BY name ASC")
     fun getAllContacts(): Flow<List<ContactEntity>>

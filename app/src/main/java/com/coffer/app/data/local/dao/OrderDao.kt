@@ -14,11 +14,17 @@ interface OrderDao {
     @Insert
     suspend fun insert(order: OrderEntity): Long
 
+    @Insert
+    suspend fun insertAll(orders: List<OrderEntity>)
+
     @Update
     suspend fun update(order: OrderEntity)
 
     @Delete
     suspend fun delete(order: OrderEntity)
+
+    @Query("DELETE FROM orders")
+    suspend fun deleteAll()
 
     @Query("SELECT * FROM orders ORDER BY createdAt DESC")
     fun getAllOrders(): Flow<List<OrderEntity>>

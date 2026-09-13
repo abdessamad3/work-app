@@ -14,11 +14,17 @@ interface ProductDao {
     @Insert
     suspend fun insert(product: ProductEntity): Long
 
+    @Insert
+    suspend fun insertAll(products: List<ProductEntity>)
+
     @Update
     suspend fun update(product: ProductEntity)
 
     @Delete
     suspend fun delete(product: ProductEntity)
+
+    @Query("DELETE FROM products")
+    suspend fun deleteAll()
 
     @Query("SELECT * FROM products ORDER BY name ASC")
     fun getAllProducts(): Flow<List<ProductEntity>>

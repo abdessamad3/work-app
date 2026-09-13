@@ -14,6 +14,9 @@ interface PaymentDao {
     @Insert
     suspend fun insert(payment: PaymentEntity)
 
+    @Insert
+    suspend fun insertAll(payments: List<PaymentEntity>)
+
     @Update
     suspend fun update(payment: PaymentEntity)
 
@@ -22,6 +25,9 @@ interface PaymentDao {
 
     @Query("DELETE FROM payments WHERE orderId = :orderId")
     suspend fun deleteAllForOrder(orderId: Int)
+
+    @Query("DELETE FROM payments")
+    suspend fun deleteAll()
 
     @Query("SELECT * FROM payments ORDER BY paidAt DESC")
     fun getAllPayments(): Flow<List<PaymentEntity>>
