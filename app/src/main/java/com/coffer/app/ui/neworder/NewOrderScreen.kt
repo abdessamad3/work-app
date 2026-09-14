@@ -46,6 +46,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.coffer.app.data.local.entity.ContactType
 import com.coffer.app.domain.effectiveUnitPriceCents
 import com.coffer.app.domain.formatCents
+import com.coffer.app.domain.normalizeBarcode
 import com.coffer.app.ui.components.BarcodeScannerDialog
 import kotlinx.coroutines.flow.collectLatest
 
@@ -393,7 +394,7 @@ fun NewOrderScreen(
         BarcodeScannerDialog(
             onDismiss = { scanTargetIndex = null },
             onScanned = { value ->
-                val product = products.find { it.barcode == value }
+                val product = products.find { it.barcode == normalizeBarcode(value) }
                 if (product != null) {
                     selectProduct(index, product.id)
                     scanNotFoundIndex = null

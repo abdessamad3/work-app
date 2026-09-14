@@ -54,6 +54,7 @@ import com.coffer.app.domain.SuggestedPrice
 import com.coffer.app.domain.formatCents
 import com.coffer.app.domain.formatDate
 import com.coffer.app.domain.lineTotalCents
+import com.coffer.app.domain.normalizeBarcode
 import com.coffer.app.ui.components.BarcodeScannerDialog
 import com.coffer.app.ui.components.StatusChip
 
@@ -477,7 +478,7 @@ private fun LineItemDialog(
         BarcodeScannerDialog(
             onDismiss = { showScanner = false },
             onScanned = { value ->
-                val product = products.find { it.barcode == value }
+                val product = products.find { it.barcode == normalizeBarcode(value) }
                 if (product != null) {
                     selectProductById(product.id)
                     scanNotFound = false

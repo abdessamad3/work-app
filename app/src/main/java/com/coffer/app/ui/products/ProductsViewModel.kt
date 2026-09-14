@@ -7,6 +7,7 @@ import com.coffer.app.data.repository.ContactRepository
 import com.coffer.app.data.repository.OrderRepository
 import com.coffer.app.data.repository.ProductRepository
 import com.coffer.app.domain.computeStock
+import com.coffer.app.domain.normalizeBarcode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -48,12 +49,12 @@ class ProductsViewModel @Inject constructor(
 
     fun createProduct(name: String, buyPriceCents: Long, sellPriceCents: Long, barcode: String?) {
         if (name.isBlank() || buyPriceCents <= 0 || sellPriceCents <= 0) return
-        viewModelScope.launch { productRepository.createProduct(name.trim(), buyPriceCents, sellPriceCents, barcode?.trim()?.ifBlank { null }) }
+        viewModelScope.launch { productRepository.createProduct(name.trim(), buyPriceCents, sellPriceCents, normalizeBarcode(barcode)) }
     }
 
     fun updateProduct(product: ProductEntity, name: String, buyPriceCents: Long, sellPriceCents: Long, barcode: String?) {
         if (name.isBlank() || buyPriceCents <= 0 || sellPriceCents <= 0) return
-        viewModelScope.launch { productRepository.updateProduct(product, name.trim(), buyPriceCents, sellPriceCents, barcode?.trim()?.ifBlank { null }) }
+        viewModelScope.launch { productRepository.updateProduct(product, name.trim(), buyPriceCents, sellPriceCents, normalizeBarcode(barcode)) }
     }
 
     /** No-op if the product is still used by a line item — callers should gate this on [ProductRow.canDelete]. */
