@@ -9,5 +9,6 @@ data class ProductEntity(
     val id: Int = 0,
     val name: String,
     val buyPriceCents: Long,
-    val sellPriceCents: Long
+    val sellPriceCents: Long,
+    val barcode: String? = null
 )

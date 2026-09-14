@@ -46,6 +46,7 @@ class BackupRepository @Inject constructor(
                     JSONObject().put("id", p.id).put("name", p.name)
                         .put("buyPriceCents", p.buyPriceCents)
                         .put("sellPriceCents", p.sellPriceCents)
+                        .put("barcode", p.barcode ?: JSONObject.NULL)
                 )
             }
         })
@@ -102,7 +103,8 @@ class BackupRepository @Inject constructor(
                 id = o.getInt("id"),
                 name = o.getString("name"),
                 buyPriceCents = o.getLong("buyPriceCents"),
-                sellPriceCents = o.getLong("sellPriceCents")
+                sellPriceCents = o.getLong("sellPriceCents"),
+                barcode = if (o.isNull("barcode")) null else o.getString("barcode")
             )
         }
         val orders = root.getJSONArray("orders").mapObjects { o ->

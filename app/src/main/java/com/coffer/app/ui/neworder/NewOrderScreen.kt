@@ -14,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -45,6 +46,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.coffer.app.data.local.entity.ContactType
 import com.coffer.app.domain.effectiveUnitPriceCents
 import com.coffer.app.domain.formatCents
+import com.coffer.app.ui.components.BarcodeScannerDialog
 import kotlinx.coroutines.flow.collectLatest
 
 private data class ItemDraft(
@@ -89,6 +91,8 @@ fun NewOrderScreen(
     var errorText by remember { mutableStateOf<String?>(null) }
     var nextItemId by remember { mutableIntStateOf(1) }
     var items by remember { mutableStateOf(listOf(ItemDraft(0))) }
+    var scanTargetIndex by remember { mutableStateOf<Int?>(null) }
+    var scanNotFoundIndex by remember { mutableStateOf<Int?>(null) }
 
     LaunchedEffect(presetContact) {
         presetContact?.let { contact ->
@@ -102,6 +106,17 @@ fun NewOrderScreen(
 
     val contactOptions = if (isPurchase) suppliers else clients
     val itemizedTotalCents = items.sumOf { it.totalCents() }
+
+    fun selectProduct(index: Int, productId: Int) {
+        val suggestion = viewModel.suggestedPriceFor(productId, selectedContactId, isPurchase)
+        items = items.toMutableList().also {
+            it[index] = it[index].copy(
+                productId = productId,
+                listPrice = String.format("%.2f", suggestion.listUnitPriceCents / 100.0),
+                discountPercent = suggestion.discountPercent.toString()
+            )
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -229,16 +244,7 @@ fun NewOrderScreen(
                                         products.forEach { product ->
                                             FilterChip(
                                                 selected = false,
-                                                onClick = {
-                                                    val suggestion = viewModel.suggestedPriceFor(product.id, selectedContactId, isPurchase)
-                                                    items = items.toMutableList().also {
-                                                        it[index] = it[index].copy(
-                                                            productId = product.id,
-                                                            listPrice = String.format("%.2f", suggestion.listUnitPriceCents / 100.0),
-                                                            discountPercent = suggestion.discountPercent.toString()
-                                                        )
-                                                    }
-                                                },
+                                                onClick = { selectProduct(index, product.id) },
                                                 label = { Text(product.name) }
                                             )
                                         }
@@ -246,6 +252,19 @@ fun NewOrderScreen(
                                             selected = false,
                                             onClick = { items = items.toMutableList().also { it[index] = it[index].copy(usingNewProduct = true) } },
                                             label = { Text("+ New product") }
+                                        )
+                                        FilterChip(
+                                            selected = false,
+                                            onClick = { scanNotFoundIndex = null; scanTargetIndex = index },
+                                            label = { Text("Scan") },
+                                            leadingIcon = { Icon(Icons.Default.QrCodeScanner, contentDescription = null) }
+                                        )
+                                    }
+                                    if (scanNotFoundIndex == index) {
+                                        Text(
+                                            "No product with that barcode.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.error
                                         )
                                     }
                                 } else if (draft.usingNewProduct) {
@@ -368,5 +387,21 @@ fun NewOrderScreen(
                 modifier = Modifier.fillMaxWidth()
             ) { Text("Save order") }
         }
+    }
+
+    scanTargetIndex?.let { index ->
+        BarcodeScannerDialog(
+            onDismiss = { scanTargetIndex = null },
+            onScanned = { value ->
+                val product = products.find { it.barcode == value }
+                if (product != null) {
+                    selectProduct(index, product.id)
+                    scanNotFoundIndex = null
+                } else {
+                    scanNotFoundIndex = index
+                }
+                scanTargetIndex = null
+            }
+        )
     }
 }

@@ -13,11 +13,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -36,6 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coffer.app.domain.formatCents
+import com.coffer.app.ui.components.BarcodeScannerDialog
 import com.coffer.app.ui.components.CofferBottomBar
 import com.coffer.app.ui.navigation.Routes
 
@@ -85,9 +88,10 @@ fun ProductsScreen(
             initialName = "",
             initialBuyPrice = "",
             initialSellPrice = "",
+            initialBarcode = "",
             onDismiss = { showAddDialog = false },
-            onSave = { name, buyCents, sellCents ->
-                viewModel.createProduct(name, buyCents, sellCents)
+            onSave = { name, buyCents, sellCents, barcode ->
+                viewModel.createProduct(name, buyCents, sellCents, barcode)
                 showAddDialog = false
             },
             onDelete = null
@@ -100,10 +104,11 @@ fun ProductsScreen(
             initialName = row.product.name,
             initialBuyPrice = String.format("%.2f", row.product.buyPriceCents / 100.0),
             initialSellPrice = String.format("%.2f", row.product.sellPriceCents / 100.0),
+            initialBarcode = row.product.barcode ?: "",
             deleteBlockedMessage = if (!row.canDelete) "This product is used in an order and can't be deleted." else null,
             onDismiss = { editTarget = null },
-            onSave = { name, buyCents, sellCents ->
-                viewModel.updateProduct(row.product, name, buyCents, sellCents)
+            onSave = { name, buyCents, sellCents, barcode ->
+                viewModel.updateProduct(row.product, name, buyCents, sellCents, barcode)
                 editTarget = null
             },
             onDelete = {
@@ -127,6 +132,9 @@ private fun ProductRowCard(row: ProductRow, onClick: () -> Unit) {
                     "Buy ${formatCents(row.product.buyPriceCents)} · Sell ${formatCents(row.product.sellPriceCents)}",
                     style = MaterialTheme.typography.bodySmall
                 )
+                row.product.barcode?.let { barcode ->
+                    Text(barcode, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
             Column(horizontalAlignment = Alignment.End) {
                 Text(
@@ -145,15 +153,18 @@ private fun ProductDialog(
     initialName: String,
     initialBuyPrice: String,
     initialSellPrice: String,
+    initialBarcode: String,
     deleteBlockedMessage: String? = null,
     onDismiss: () -> Unit,
-    onSave: (String, Long, Long) -> Unit,
+    onSave: (String, Long, Long, String?) -> Unit,
     onDelete: (() -> Unit)?
 ) {
     var name by remember { mutableStateOf(initialName) }
     var buyPrice by remember { mutableStateOf(initialBuyPrice) }
     var sellPrice by remember { mutableStateOf(initialSellPrice) }
+    var barcode by remember { mutableStateOf(initialBarcode) }
     var error by remember { mutableStateOf<String?>(null) }
+    var showScanner by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -165,6 +176,19 @@ private fun ProductDialog(
                 OutlinedTextField(value = buyPrice, onValueChange = { buyPrice = it }, label = { Text("Buy price (from supplier)") }, singleLine = true)
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(value = sellPrice, onValueChange = { sellPrice = it }, label = { Text("Sell price (to client)") }, singleLine = true)
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = barcode,
+                        onValueChange = { barcode = it },
+                        label = { Text("Barcode (optional)") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = { showScanner = true }) {
+                        Icon(Icons.Default.QrCodeScanner, contentDescription = "Scan barcode")
+                    }
+                }
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             }
         },
@@ -175,7 +199,7 @@ private fun ProductDialog(
                 if (name.isBlank() || buyValue == null || buyValue <= 0 || sellValue == null || sellValue <= 0) {
                     error = "Enter a name and buy/sell prices greater than 0."
                 } else {
-                    onSave(name.trim(), Math.round(buyValue * 100), Math.round(sellValue * 100))
+                    onSave(name.trim(), Math.round(buyValue * 100), Math.round(sellValue * 100), barcode.trim().ifBlank { null })
                 }
             }) { Text("Save") }
         },
@@ -190,4 +214,14 @@ private fun ProductDialog(
             }
         }
     )
+
+    if (showScanner) {
+        BarcodeScannerDialog(
+            onDismiss = { showScanner = false },
+            onScanned = { value ->
+                barcode = value
+                showScanner = false
+            }
+        )
+    }
 }

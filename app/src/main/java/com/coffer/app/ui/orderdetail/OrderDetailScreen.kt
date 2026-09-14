@@ -16,6 +16,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -53,6 +54,7 @@ import com.coffer.app.domain.SuggestedPrice
 import com.coffer.app.domain.formatCents
 import com.coffer.app.domain.formatDate
 import com.coffer.app.domain.lineTotalCents
+import com.coffer.app.ui.components.BarcodeScannerDialog
 import com.coffer.app.ui.components.StatusChip
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -344,9 +346,18 @@ private fun LineItemDialog(
     var listPrice by remember { mutableStateOf(initialListPrice) }
     var discountPercent by remember { mutableStateOf(initialDiscountPercent) }
     var error by remember { mutableStateOf<String?>(null) }
+    var showScanner by remember { mutableStateOf(false) }
+    var scanNotFound by remember { mutableStateOf(false) }
 
     val selectedProduct = products.find { it.id == selectedProductId }
     val canChangeProduct = initialProductId == null
+
+    fun selectProductById(productId: Int) {
+        selectedProductId = productId
+        val suggestion = onSuggestPrice(productId)
+        listPrice = String.format("%.2f", suggestion.listUnitPriceCents / 100.0)
+        discountPercent = suggestion.discountPercent.toString()
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -363,16 +374,24 @@ private fun LineItemDialog(
                         products.forEach { product ->
                             FilterChip(
                                 selected = false,
-                                onClick = {
-                                    selectedProductId = product.id
-                                    val suggestion = onSuggestPrice(product.id)
-                                    listPrice = String.format("%.2f", suggestion.listUnitPriceCents / 100.0)
-                                    discountPercent = suggestion.discountPercent.toString()
-                                },
+                                onClick = { selectProductById(product.id) },
                                 label = { Text(product.name) }
                             )
                         }
                         FilterChip(selected = false, onClick = { usingNewProduct = true }, label = { Text("+ New product") })
+                        FilterChip(
+                            selected = false,
+                            onClick = { scanNotFound = false; showScanner = true },
+                            label = { Text("Scan") },
+                            leadingIcon = { Icon(Icons.Default.QrCodeScanner, contentDescription = null) }
+                        )
+                    }
+                    if (scanNotFound) {
+                        Text(
+                            "No product with that barcode.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
                     }
                 } else if (canChangeProduct && usingNewProduct) {
                     OutlinedTextField(
@@ -453,6 +472,22 @@ private fun LineItemDialog(
             }
         }
     )
+
+    if (showScanner) {
+        BarcodeScannerDialog(
+            onDismiss = { showScanner = false },
+            onScanned = { value ->
+                val product = products.find { it.barcode == value }
+                if (product != null) {
+                    selectProductById(product.id)
+                    scanNotFound = false
+                } else {
+                    scanNotFound = true
+                }
+                showScanner = false
+            }
+        )
+    }
 }
 
 @Composable
