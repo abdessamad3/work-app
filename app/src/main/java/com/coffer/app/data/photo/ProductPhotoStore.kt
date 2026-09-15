@@ -34,6 +34,12 @@ object ProductPhotoStore {
         runCatching { File(path).delete() }
     }
 
+    fun loadBitmap(path: String): Bitmap? = runCatching { BitmapFactory.decodeFile(path) }.getOrNull()
+
+    fun loadBitmap(context: Context, source: Uri): Bitmap? = runCatching {
+        context.contentResolver.openInputStream(source)?.use { BitmapFactory.decodeStream(it) }
+    }.getOrNull()
+
     private fun scaleDown(bitmap: Bitmap): Bitmap {
         val maxSide = maxOf(bitmap.width, bitmap.height)
         if (maxSide <= MAX_DIMENSION) return bitmap

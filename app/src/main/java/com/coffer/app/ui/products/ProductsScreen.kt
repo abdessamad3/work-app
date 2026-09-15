@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ImageSearch
 import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.QrCodeScanner
@@ -62,12 +63,37 @@ fun ProductsScreen(
     onNavigate: (String) -> Unit,
     viewModel: ProductsViewModel = hiltViewModel()
 ) {
+    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
     var editTarget by remember { mutableStateOf<ProductRow?>(null) }
+    var showPhotoSearchChooser by remember { mutableStateOf(false) }
+    var pendingSearchCameraUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingSearchCameraFile by remember { mutableStateOf<File?>(null) }
+
+    val searchTakePictureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        val uri = pendingSearchCameraUri
+        if (success && uri != null) {
+            viewModel.searchByPhoto(context, uri, pendingSearchCameraFile)
+        } else {
+            pendingSearchCameraFile?.delete()
+        }
+    }
+    val searchPickImageLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) viewModel.searchByPhoto(context, uri)
+    }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Products") }) },
+        topBar = {
+            TopAppBar(
+                title = { Text("Products") },
+                actions = {
+                    IconButton(onClick = { showPhotoSearchChooser = true }) {
+                        Icon(Icons.Default.ImageSearch, contentDescription = "Search by photo")
+                    }
+                }
+            )
+        },
         bottomBar = { CofferBottomBar(currentRoute = Routes.PRODUCTS, onNavigate = onNavigate) },
         floatingActionButton = {
             FloatingActionButton(onClick = { showAddDialog = true }) {
@@ -75,25 +101,73 @@ fun ProductsScreen(
             }
         }
     ) { padding ->
-        if (uiState.rows.isEmpty()) {
-            Column(
-                modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text("No products yet — tap + to add one, or create one while itemizing an order.", style = MaterialTheme.typography.bodyMedium)
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            if (uiState.photoFilterActive) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Showing closest photo matches" +
+                            if (uiState.photoFilterOmittedCount > 0) " · ${uiState.photoFilterOmittedCount} without a photo hidden" else "",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    TextButton(onClick = { viewModel.clearPhotoFilter() }) { Text("Clear") }
+                }
             }
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(padding),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                items(uiState.rows, key = { it.product.id }) { row ->
-                    ProductRowCard(row = row, onClick = { editTarget = row })
+            if (uiState.rows.isEmpty()) {
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(16.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        if (uiState.photoFilterActive) {
+                            "None of your products have a photo yet — add one from a product's edit screen first."
+                        } else {
+                            "No products yet — tap + to add one, or create one while itemizing an order."
+                        },
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items(uiState.rows, key = { it.product.id }) { row ->
+                        ProductRowCard(row = row, onClick = { editTarget = row })
+                    }
                 }
             }
         }
+    }
+
+    if (showPhotoSearchChooser) {
+        AlertDialog(
+            onDismissRequest = { showPhotoSearchChooser = false },
+            title = { Text("Search by photo") },
+            text = { Text("Take or choose a photo of the item you're looking for. Products are shown closest match first.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showPhotoSearchChooser = false
+                    val file = File(File(context.cacheDir, "camera").apply { mkdirs() }, "search_${System.currentTimeMillis()}.jpg")
+                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                    pendingSearchCameraUri = uri
+                    pendingSearchCameraFile = file
+                    searchTakePictureLauncher.launch(uri)
+                }) { Text("Take a photo") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showPhotoSearchChooser = false
+                    searchPickImageLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                }) { Text("Choose from gallery") }
+            }
+        )
     }
 
     if (showAddDialog) {
