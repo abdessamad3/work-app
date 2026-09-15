@@ -16,22 +16,27 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
 
+/** Result of one listen attempt: either a transcript, or a human-readable reason it failed. */
+data class ListenResult(val text: String?, val failureReason: String? = null)
+
 @Singleton
 class ArabicSpeechRecognizer @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     fun isAvailable(): Boolean = SpeechRecognizer.isRecognitionAvailable(context)
 
-    /** Listens once and returns the top transcript, or null on silence/timeout/error. */
-    suspend fun listenOnce(timeoutMillis: Long = 8_000L): String? = withContext(Dispatchers.Main) {
-        if (!isAvailable()) return@withContext null
+    /** Listens once and returns the top transcript, or a diagnostic reason it heard nothing. */
+    suspend fun listenOnce(timeoutMillis: Long = 8_000L): ListenResult = withContext(Dispatchers.Main) {
+        if (!isAvailable()) {
+            return@withContext ListenResult(null, "لا توجد خدمة تعرف صوتي على هذا الجهاز")
+        }
 
         suspendCancellableCoroutine { continuation ->
             val recognizer = SpeechRecognizer.createSpeechRecognizer(context)
             var finished = false
             val timeoutHandler = Handler(Looper.getMainLooper())
 
-            fun finish(result: String?) {
+            fun finish(result: ListenResult) {
                 if (finished) return
                 finished = true
                 timeoutHandler.removeCallbacksAndMessages(null)
@@ -43,10 +48,15 @@ class ArabicSpeechRecognizer @Inject constructor(
             recognizer.setRecognitionListener(object : RecognitionListener {
                 override fun onResults(results: Bundle) {
                     val matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    finish(matches?.firstOrNull())
+                    val top = matches?.firstOrNull()
+                    if (top.isNullOrBlank()) {
+                        finish(ListenResult(null, "تعرّف بلا كلمات (نتيجة فارغة)"))
+                    } else {
+                        finish(ListenResult(top))
+                    }
                 }
 
-                override fun onError(error: Int) = finish(null)
+                override fun onError(error: Int) = finish(ListenResult(null, describeError(error)))
                 override fun onReadyForSpeech(params: Bundle?) = Unit
                 override fun onBeginningOfSpeech() = Unit
                 override fun onRmsChanged(rmsdB: Float) = Unit
@@ -64,10 +74,24 @@ class ArabicSpeechRecognizer @Inject constructor(
                 putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1500)
             }
 
-            runCatching { recognizer.startListening(intent) }.onFailure { finish(null) }
+            runCatching { recognizer.startListening(intent) }
+                .onFailure { finish(ListenResult(null, "تعذر بدء الاستماع: ${it.message}")) }
 
             continuation.invokeOnCancellation { runCatching { recognizer.destroy() } }
-            timeoutHandler.postDelayed({ finish(null) }, timeoutMillis)
+            timeoutHandler.postDelayed({ finish(ListenResult(null, "انتهت المهلة دون صوت")) }, timeoutMillis)
         }
+    }
+
+    private fun describeError(error: Int): String = when (error) {
+        SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "خطأ شبكة (مهلة الاتصال)"
+        SpeechRecognizer.ERROR_NETWORK -> "خطأ شبكة"
+        SpeechRecognizer.ERROR_AUDIO -> "خطأ في تسجيل الصوت"
+        SpeechRecognizer.ERROR_SERVER -> "خطأ من خادم التعرف الصوتي"
+        SpeechRecognizer.ERROR_CLIENT -> "خطأ داخلي في التطبيق"
+        SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "لم يُسمع أي كلام"
+        SpeechRecognizer.ERROR_NO_MATCH -> "لم يتم التعرف على الكلام"
+        SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "خدمة التعرف الصوتي مشغولة"
+        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "إذن الميكروفون غير ممنوح لخدمة التعرف الصوتي"
+        else -> "خطأ غير معروف (رمز $error)"
     }
 }

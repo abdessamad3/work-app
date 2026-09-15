@@ -180,6 +180,16 @@ private fun InCallContent(state: CallUiState.InCall, onDecline: () -> Unit) {
         Spacer(Modifier.height(16.dp))
         LazyColumn(modifier = Modifier.weight(1f)) {
             items(state.transcript) { line ->
+                if (line.speaker == Speaker.SYSTEM) {
+                    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.Center) {
+                        Text(
+                            "⚠ ${line.text}",
+                            color = Color(0xFFFFC107),
+                            fontSize = 12.sp
+                        )
+                    }
+                    return@items
+                }
                 val isAgent = line.speaker == Speaker.AGENT
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),

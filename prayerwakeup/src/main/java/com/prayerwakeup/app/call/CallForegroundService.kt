@@ -91,6 +91,10 @@ class CallForegroundService : Service() {
                     transcript.add(TranscriptLine(Speaker.USER, event.text))
                     sessionController.updateInCall(prayer, transcript.toList(), listening = false)
                 }
+                is CallEvent.Debug -> {
+                    transcript.add(TranscriptLine(Speaker.SYSTEM, event.text))
+                    sessionController.updateInCall(prayer, transcript.toList(), listening = false)
+                }
                 CallEvent.Listening -> sessionController.updateInCall(prayer, transcript.toList(), listening = true)
                 CallEvent.Ended -> sessionController.endCall(prayer)
             }

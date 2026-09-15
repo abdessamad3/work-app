@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
-enum class Speaker { AGENT, USER }
+enum class Speaker { AGENT, USER, SYSTEM }
 data class TranscriptLine(val speaker: Speaker, val text: String)
 
 sealed interface CallUiState {

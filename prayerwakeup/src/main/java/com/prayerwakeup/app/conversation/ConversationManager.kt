@@ -8,6 +8,7 @@ import javax.inject.Singleton
 sealed interface CallEvent {
     data class AgentSpeaking(val text: String) : CallEvent
     data class UserHeard(val text: String) : CallEvent
+    data class Debug(val text: String) : CallEvent
     data object Listening : CallEvent
     data object Ended : CallEvent
 }
@@ -48,13 +49,14 @@ class ConversationManager @Inject constructor(
             turn++
             if (isCancelled()) break
 
-            if (heard.isNullOrBlank()) {
+            if (heard.text.isNullOrBlank()) {
+                heard.failureReason?.let { onEvent(CallEvent.Debug(it)) }
                 nextLine = PersonaPrompts.fallbackNudge(turn, prayer)
                 continue
             }
 
-            onEvent(CallEvent.UserHeard(heard))
-            history.add(ConversationTurn("user", heard))
+            onEvent(CallEvent.UserHeard(heard.text))
+            history.add(ConversationTurn("user", heard.text))
 
             val reply = if (claudeClient.hasApiKey()) {
                 claudeClient.sendMessage(systemPrompt, history).getOrNull()
