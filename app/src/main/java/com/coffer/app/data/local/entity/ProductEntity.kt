@@ -10,5 +10,6 @@ data class ProductEntity(
     val name: String,
     val buyPriceCents: Long,
     val sellPriceCents: Long,
-    val barcode: String? = null
+    val barcode: String? = null,
+    val photoPath: String? = null
 )

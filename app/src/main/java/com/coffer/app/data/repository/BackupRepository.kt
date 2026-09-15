@@ -47,6 +47,7 @@ class BackupRepository @Inject constructor(
                         .put("buyPriceCents", p.buyPriceCents)
                         .put("sellPriceCents", p.sellPriceCents)
                         .put("barcode", p.barcode ?: JSONObject.NULL)
+                        .put("photoPath", p.photoPath ?: JSONObject.NULL)
                 )
             }
         })
@@ -104,7 +105,8 @@ class BackupRepository @Inject constructor(
                 name = o.getString("name"),
                 buyPriceCents = o.getLong("buyPriceCents"),
                 sellPriceCents = o.getLong("sellPriceCents"),
-                barcode = if (o.isNull("barcode")) null else o.getString("barcode")
+                barcode = if (o.isNull("barcode")) null else o.getString("barcode"),
+                photoPath = if (o.isNull("photoPath")) null else o.getString("photoPath")
             )
         }
         val orders = root.getJSONArray("orders").mapObjects { o ->

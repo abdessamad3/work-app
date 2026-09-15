@@ -47,14 +47,14 @@ class ProductsViewModel @Inject constructor(
         ProductsUiState(rows = rows)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ProductsUiState())
 
-    fun createProduct(name: String, buyPriceCents: Long, sellPriceCents: Long, barcode: String?) {
+    fun createProduct(name: String, buyPriceCents: Long, sellPriceCents: Long, barcode: String?, photoPath: String?) {
         if (name.isBlank() || buyPriceCents <= 0 || sellPriceCents <= 0) return
-        viewModelScope.launch { productRepository.createProduct(name.trim(), buyPriceCents, sellPriceCents, normalizeBarcode(barcode)) }
+        viewModelScope.launch { productRepository.createProduct(name.trim(), buyPriceCents, sellPriceCents, normalizeBarcode(barcode), photoPath) }
     }
 
-    fun updateProduct(product: ProductEntity, name: String, buyPriceCents: Long, sellPriceCents: Long, barcode: String?) {
+    fun updateProduct(product: ProductEntity, name: String, buyPriceCents: Long, sellPriceCents: Long, barcode: String?, photoPath: String?) {
         if (name.isBlank() || buyPriceCents <= 0 || sellPriceCents <= 0) return
-        viewModelScope.launch { productRepository.updateProduct(product, name.trim(), buyPriceCents, sellPriceCents, normalizeBarcode(barcode)) }
+        viewModelScope.launch { productRepository.updateProduct(product, name.trim(), buyPriceCents, sellPriceCents, normalizeBarcode(barcode), photoPath) }
     }
 
     /** No-op if the product is still used by a line item — callers should gate this on [ProductRow.canDelete]. */

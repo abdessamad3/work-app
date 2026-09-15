@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -48,6 +49,7 @@ import com.coffer.app.domain.effectiveUnitPriceCents
 import com.coffer.app.domain.formatCents
 import com.coffer.app.domain.normalizeBarcode
 import com.coffer.app.ui.components.BarcodeScannerDialog
+import com.coffer.app.ui.components.ProductThumbnail
 import kotlinx.coroutines.flow.collectLatest
 
 private data class ItemDraft(
@@ -246,7 +248,10 @@ fun NewOrderScreen(
                                             FilterChip(
                                                 selected = false,
                                                 onClick = { selectProduct(index, product.id) },
-                                                label = { Text(product.name) }
+                                                label = { Text(product.name) },
+                                                leadingIcon = if (product.photoPath != null) {
+                                                    { ProductThumbnail(photoPath = product.photoPath, modifier = Modifier.size(20.dp)) }
+                                                } else null
                                             )
                                         }
                                         FilterChip(

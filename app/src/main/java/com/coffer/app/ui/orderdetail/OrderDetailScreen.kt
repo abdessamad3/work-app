@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -56,6 +57,7 @@ import com.coffer.app.domain.formatDate
 import com.coffer.app.domain.lineTotalCents
 import com.coffer.app.domain.normalizeBarcode
 import com.coffer.app.ui.components.BarcodeScannerDialog
+import com.coffer.app.ui.components.ProductThumbnail
 import com.coffer.app.ui.components.StatusChip
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -376,7 +378,10 @@ private fun LineItemDialog(
                             FilterChip(
                                 selected = false,
                                 onClick = { selectProductById(product.id) },
-                                label = { Text(product.name) }
+                                label = { Text(product.name) },
+                                leadingIcon = if (product.photoPath != null) {
+                                    { ProductThumbnail(photoPath = product.photoPath, modifier = Modifier.size(20.dp)) }
+                                } else null
                             )
                         }
                         FilterChip(selected = false, onClick = { usingNewProduct = true }, label = { Text("+ New product") })
