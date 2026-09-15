@@ -2,6 +2,7 @@ package com.prayerwakeup.app.conversation
 
 import com.prayerwakeup.app.domain.CallerPersona
 import com.prayerwakeup.app.domain.Prayer
+import kotlinx.coroutines.delay
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -44,6 +45,10 @@ class ConversationManager @Inject constructor(
             history.add(ConversationTurn("assistant", nextLine))
             if (isCancelled()) break
 
+            // TTS's onDone can fire slightly before the audio hardware finishes draining,
+            // so start listening a beat later instead of risking the recognizer catching
+            // the tail of our own voice.
+            delay(500)
             onEvent(CallEvent.Listening)
             val heard = speechRecognizer.listenOnce()
             turn++

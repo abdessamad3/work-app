@@ -26,7 +26,7 @@ class ArabicSpeechRecognizer @Inject constructor(
     fun isAvailable(): Boolean = SpeechRecognizer.isRecognitionAvailable(context)
 
     /** Listens once and returns the top transcript, or a diagnostic reason it heard nothing. */
-    suspend fun listenOnce(timeoutMillis: Long = 8_000L): ListenResult = withContext(Dispatchers.Main) {
+    suspend fun listenOnce(timeoutMillis: Long = 9_000L): ListenResult = withContext(Dispatchers.Main) {
         if (!isAvailable()) {
             return@withContext ListenResult(null, "لا توجد خدمة تعرف صوتي على هذا الجهاز")
         }
@@ -34,7 +34,23 @@ class ArabicSpeechRecognizer @Inject constructor(
         suspendCancellableCoroutine { continuation ->
             val recognizer = SpeechRecognizer.createSpeechRecognizer(context)
             var finished = false
+            var speechDetected = false
+            var maxRms = -100f
+            var lastPartial: String? = null
             val timeoutHandler = Handler(Looper.getMainLooper())
+
+            // Turns a bare error/empty outcome into something that says whether the mic
+            // picked up any sound at all, so "nothing heard" and "heard but not understood"
+            // don't look identical on screen.
+            fun withDiagnostics(base: String): String {
+                val micState = when {
+                    speechDetected -> "تم رصد بداية كلام"
+                    maxRms > -30f -> "التُقط صوت خافت لكن لم يُعتبر كلاماً"
+                    else -> "لم يُلتقط أي صوت من الميكروفون"
+                }
+                val partial = lastPartial?.let { " — آخر تخمين جزئي: \"$it\"" }.orEmpty()
+                return "$base ($micState)$partial"
+            }
 
             fun finish(result: ListenResult) {
                 if (finished) return
@@ -50,19 +66,29 @@ class ArabicSpeechRecognizer @Inject constructor(
                     val matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     val top = matches?.firstOrNull()
                     if (top.isNullOrBlank()) {
-                        finish(ListenResult(null, "تعرّف بلا كلمات (نتيجة فارغة)"))
+                        finish(ListenResult(null, withDiagnostics("تعرّف بلا كلمات")))
                     } else {
                         finish(ListenResult(top))
                     }
                 }
 
-                override fun onError(error: Int) = finish(ListenResult(null, describeError(error)))
+                override fun onError(error: Int) = finish(ListenResult(null, withDiagnostics(describeError(error))))
                 override fun onReadyForSpeech(params: Bundle?) = Unit
-                override fun onBeginningOfSpeech() = Unit
-                override fun onRmsChanged(rmsdB: Float) = Unit
+                override fun onBeginningOfSpeech() {
+                    speechDetected = true
+                }
+
+                override fun onRmsChanged(rmsdB: Float) {
+                    if (rmsdB > maxRms) maxRms = rmsdB
+                }
+
                 override fun onBufferReceived(buffer: ByteArray?) = Unit
                 override fun onEndOfSpeech() = Unit
-                override fun onPartialResults(partialResults: Bundle?) = Unit
+                override fun onPartialResults(partialResults: Bundle?) {
+                    val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    matches?.firstOrNull()?.takeIf { it.isNotBlank() }?.let { lastPartial = it }
+                }
+
                 override fun onEvent(eventType: Int, params: Bundle?) = Unit
             })
 
@@ -70,6 +96,7 @@ class ArabicSpeechRecognizer @Inject constructor(
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ar-SA")
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1500)
                 putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1500)
             }
@@ -78,7 +105,7 @@ class ArabicSpeechRecognizer @Inject constructor(
                 .onFailure { finish(ListenResult(null, "تعذر بدء الاستماع: ${it.message}")) }
 
             continuation.invokeOnCancellation { runCatching { recognizer.destroy() } }
-            timeoutHandler.postDelayed({ finish(ListenResult(null, "انتهت المهلة دون صوت")) }, timeoutMillis)
+            timeoutHandler.postDelayed({ finish(ListenResult(null, withDiagnostics("انتهت المهلة"))) }, timeoutMillis)
         }
     }
 
