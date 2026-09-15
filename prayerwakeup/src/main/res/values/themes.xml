@@ -1,0 +1,8 @@
+<resources>
+    <style name="Theme.PrayerWakeup" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <style name="Theme.PrayerWakeup.Call" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowIsTranslucent">false</item>
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
+</resources>

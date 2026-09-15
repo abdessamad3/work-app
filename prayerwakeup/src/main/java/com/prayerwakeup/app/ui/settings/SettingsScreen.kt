@@ -1,0 +1,302 @@
+package com.prayerwakeup.app.ui.settings
+
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Divider
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.prayerwakeup.app.domain.CalculationMethod
+import com.prayerwakeup.app.domain.CallerPersona
+import com.prayerwakeup.app.domain.Madhab
+import com.prayerwakeup.app.domain.Prayer
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewModel()) {
+    val state by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("الإعدادات") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Filled.ArrowBack, contentDescription = "رجوع")
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState())
+        ) {
+            SectionTitle("الموقع")
+            Text(
+                if (state.settings.hasLocation) {
+                    "${state.settings.locationLabel} (${"%.4f".format(state.settings.latitude)}, ${"%.4f".format(state.settings.longitude)})"
+                } else {
+                    "لم يُحدد بعد"
+                }
+            )
+            Spacer(Modifier.height(8.dp))
+            var locating by remember { mutableStateOf(false) }
+            var locationError by remember { mutableStateOf<String?>(null) }
+            Button(onClick = {
+                locating = true
+                locationError = null
+                viewModel.detectLocation { success ->
+                    locating = false
+                    if (!success) locationError = "تعذر تحديد الموقع، تأكد من تفعيل GPS أو أدخله يدوياً بالأسفل"
+                }
+            }) {
+                Text(if (locating) "جارٍ تحديد الموقع..." else "استخدام موقعي الحالي (GPS)")
+            }
+            locationError?.let {
+                Spacer(Modifier.height(4.dp))
+                Text(it, color = MaterialTheme.colorScheme.error)
+            }
+
+            Spacer(Modifier.height(12.dp))
+            ManualLocationForm(
+                initialLat = state.settings.latitude,
+                initialLon = state.settings.longitude,
+                initialTz = state.settings.timeZoneId,
+                onSave = { lat, lon, tz, label -> viewModel.setManualLocation(lat, lon, tz, label) }
+            )
+
+            Divider(Modifier.padding(vertical = 20.dp))
+
+            SectionTitle("طريقة حساب المواقيت")
+            CalculationMethod.entries.forEach { method ->
+                RadioRow(
+                    label = method.displayName,
+                    selected = state.settings.calculationMethod == method,
+                    onClick = { viewModel.setCalculationMethod(method) }
+                )
+            }
+
+            Divider(Modifier.padding(vertical = 20.dp))
+
+            SectionTitle("المذهب (لحساب وقت العصر)")
+            Madhab.entries.forEach { madhab ->
+                RadioRow(
+                    label = madhab.displayName,
+                    selected = state.settings.madhab == madhab,
+                    onClick = { viewModel.setMadhab(madhab) }
+                )
+            }
+
+            Divider(Modifier.padding(vertical = 20.dp))
+
+            SectionTitle("الصلوات المفعّلة للاتصال")
+            Prayer.entries.forEach { prayer ->
+                Row {
+                    Checkbox(
+                        checked = state.settings.enabledPrayers.contains(prayer),
+                        onCheckedChange = { viewModel.togglePrayer(prayer, state.settings.enabledPrayers) }
+                    )
+                    Text(prayer.arabicName, modifier = Modifier.padding(top = 12.dp))
+                }
+            }
+
+            Divider(Modifier.padding(vertical = 20.dp))
+
+            SectionTitle("أسلوب المتصل")
+            CallerPersona.entries.forEach { persona ->
+                Column {
+                    RadioRow(
+                        label = persona.displayName,
+                        selected = state.settings.persona == persona,
+                        onClick = { viewModel.setPersona(persona) }
+                    )
+                    Text(
+                        persona.styleDescription,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.padding(start = 40.dp, bottom = 4.dp)
+                    )
+                }
+            }
+
+            Divider(Modifier.padding(vertical = 20.dp))
+
+            SectionTitle("مدة المكالمة القصوى (دقائق)")
+            Stepper(
+                value = state.settings.maxCallMinutes,
+                range = 1..10,
+                onChange = { viewModel.setMaxCallMinutes(it) }
+            )
+
+            Divider(Modifier.padding(vertical = 20.dp))
+
+            SectionTitle("محادثة ذكية حقيقية (اختياري)")
+            Text("أضف مفتاح Anthropic API الخاص بك ليتحدث معك المتصل بشكل حقيقي ويرد على ما تقوله. بدون المفتاح، سيستخدم التطبيق جملاً ثابتة فقط.")
+            Spacer(Modifier.height(8.dp))
+            var apiKeyField by remember(state.apiKey) { mutableStateOf(state.apiKey) }
+            OutlinedTextField(
+                value = apiKeyField,
+                onValueChange = { apiKeyField = it },
+                label = { Text("Anthropic API Key") },
+                visualTransformation = PasswordVisualTransformation(),
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(8.dp))
+            Button(onClick = { viewModel.saveApiKey(apiKeyField) }) { Text("حفظ المفتاح") }
+
+            Divider(Modifier.padding(vertical = 20.dp))
+
+            SectionTitle("الأذونات")
+            if (!state.canScheduleExactAlarms) {
+                PermissionRow(
+                    text = "إذن التنبيهات الدقيقة مطلوب حتى تتصل بك المكالمة في الوقت المحدد بالضبط.",
+                    buttonLabel = "فتح الإعدادات"
+                ) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        context.startActivity(
+                            Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${context.packageName}"))
+                        )
+                    }
+                }
+            }
+            PermissionRow(
+                text = "استثناء التطبيق من تحسين البطارية يمنع النظام من إيقافه قبل موعد الصلاة.",
+                buttonLabel = "فتح الإعدادات"
+            ) {
+                runCatching {
+                    context.startActivity(
+                        Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${context.packageName}"))
+                    )
+                }.onFailure {
+                    context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+                }
+            }
+            PermissionRow(
+                text = "تأكد من تفعيل الإشعارات ذات الأولوية العالية للتطبيق.",
+                buttonLabel = "إعدادات الإشعارات"
+            ) {
+                val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                    .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                context.startActivity(intent)
+            }
+
+            Spacer(Modifier.height(32.dp))
+        }
+    }
+}
+
+@Composable
+private fun SectionTitle(text: String) {
+    Text(text, style = MaterialTheme.typography.titleMedium)
+    Spacer(Modifier.height(8.dp))
+}
+
+@Composable
+private fun RadioRow(label: String, selected: Boolean, onClick: () -> Unit) {
+    Row {
+        RadioButton(selected = selected, onClick = onClick)
+        Text(label, modifier = Modifier.padding(top = 12.dp))
+    }
+}
+
+@Composable
+private fun PermissionRow(text: String, buttonLabel: String, onClick: () -> Unit) {
+    Column(Modifier.padding(vertical = 8.dp)) {
+        Text(text, style = MaterialTheme.typography.bodyMedium)
+        Spacer(Modifier.height(4.dp))
+        TextButton(onClick = onClick) { Text(buttonLabel) }
+    }
+}
+
+@Composable
+private fun Stepper(value: Int, range: IntRange, onChange: (Int) -> Unit) {
+    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        OutlinedButton(onClick = { if (value - 1 >= range.first) onChange(value - 1) }) { Text("-") }
+        Text("$value", modifier = Modifier.padding(horizontal = 16.dp))
+        OutlinedButton(onClick = { if (value + 1 <= range.last) onChange(value + 1) }) { Text("+") }
+    }
+}
+
+@Composable
+private fun ManualLocationForm(
+    initialLat: Double,
+    initialLon: Double,
+    initialTz: String,
+    onSave: (Double, Double, String, String) -> Unit
+) {
+    var lat by remember { mutableStateOf(initialLat.toString()) }
+    var lon by remember { mutableStateOf(initialLon.toString()) }
+    var tz by remember { mutableStateOf(initialTz) }
+    var label by remember { mutableStateOf("") }
+
+    Text("أو أدخل الموقع يدوياً:", style = MaterialTheme.typography.bodyMedium)
+    Spacer(Modifier.height(8.dp))
+    OutlinedTextField(
+        value = lat, onValueChange = { lat = it }, label = { Text("خط العرض (Latitude)") },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth()
+    )
+    Spacer(Modifier.height(8.dp))
+    OutlinedTextField(
+        value = lon, onValueChange = { lon = it }, label = { Text("خط الطول (Longitude)") },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth()
+    )
+    Spacer(Modifier.height(8.dp))
+    OutlinedTextField(
+        value = tz, onValueChange = { tz = it }, label = { Text("المنطقة الزمنية (مثال: Asia/Riyadh)") },
+        modifier = Modifier.fillMaxWidth()
+    )
+    Spacer(Modifier.height(8.dp))
+    OutlinedTextField(
+        value = label, onValueChange = { label = it }, label = { Text("اسم المدينة (اختياري)") },
+        modifier = Modifier.fillMaxWidth()
+    )
+    Spacer(Modifier.height(8.dp))
+    Button(onClick = {
+        val latValue = lat.toDoubleOrNull()
+        val lonValue = lon.toDoubleOrNull()
+        if (latValue != null && lonValue != null && tz.isNotBlank()) {
+            onSave(latValue, lonValue, tz.trim(), label.ifBlank { "موقع يدوي" })
+        }
+    }) {
+        Text("حفظ الموقع اليدوي")
+    }
+}

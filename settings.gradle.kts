@@ -15,3 +15,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "MarketCredits"
 include(":app")
+include(":prayerwakeup")
