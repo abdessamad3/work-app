@@ -23,19 +23,27 @@ jobs:
       - name: Build debug APK
         run: ./gradlew assembleDebug --stacktrace
 
-      - name: Upload APK as build artifact
+      - name: Upload Coffer APK as build artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
 
-      - name: Publish APK to a downloadable release
+      - name: Upload Prayer Wakeup APK as build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: prayerwakeup-debug-apk
+          path: prayerwakeup/build/outputs/apk/debug/prayerwakeup-debug.apk
+
+      - name: Publish APKs to a downloadable release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: debug-apk-latest
-          name: Debug APK (latest)
+          name: Debug APKs (latest)
           body: |
-            Automatically built debug APK from `${{ github.ref_name }}` (commit ${{ github.sha }}).
+            Automatically built debug APKs from `${{ github.ref_name }}` (commit ${{ github.sha }}).
             For testing only — not signed for release.
           prerelease: true
-          files: app/build/outputs/apk/debug/app-debug.apk
+          files: |
+            app/build/outputs/apk/debug/app-debug.apk
+            prayerwakeup/build/outputs/apk/debug/prayerwakeup-debug.apk
