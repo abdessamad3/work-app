@@ -11,9 +11,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Stores the user's Anthropic API key encrypted at rest, on-device only.
+ * Stores the user's Gemini API key encrypted at rest, on-device only.
  * The key is never bundled with the app or sent anywhere except directly
- * to api.anthropic.com when placing a call.
+ * to generativelanguage.googleapis.com when placing a call.
  */
 @Singleton
 class SecureKeyStore @Inject constructor(
@@ -32,17 +32,17 @@ class SecureKeyStore @Inject constructor(
         )
     }
 
-    private val _apiKey = MutableStateFlow(prefs.getString(KEY_ANTHROPIC_API_KEY, null).orEmpty())
+    private val _apiKey = MutableStateFlow(prefs.getString(KEY_GEMINI_API_KEY, null).orEmpty())
     val apiKey: StateFlow<String> = _apiKey.asStateFlow()
 
     fun setApiKey(key: String) {
-        prefs.edit().putString(KEY_ANTHROPIC_API_KEY, key).apply()
+        prefs.edit().putString(KEY_GEMINI_API_KEY, key).apply()
         _apiKey.value = key
     }
 
     fun hasApiKey(): Boolean = _apiKey.value.isNotBlank()
 
     private companion object {
-        const val KEY_ANTHROPIC_API_KEY = "anthropic_api_key"
+        const val KEY_GEMINI_API_KEY = "gemini_api_key"
     }
 }

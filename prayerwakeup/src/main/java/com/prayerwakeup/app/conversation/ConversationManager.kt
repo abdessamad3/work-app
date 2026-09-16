@@ -15,7 +15,7 @@ sealed interface CallEvent {
 }
 
 /**
- * Drives one wake-up phone call: speak -> listen -> ask Claude how to respond -> speak -> repeat,
+ * Drives one wake-up phone call: speak -> listen -> ask Gemini how to respond -> speak -> repeat,
  * until the user confirms they're up (LLM emits [END_CALL]) or the turn limit is hit. Falls back
  * to a fixed escalating script if no API key is configured or a request fails, so a call never
  * goes silent even without a working connection.
@@ -24,7 +24,7 @@ sealed interface CallEvent {
 class ConversationManager @Inject constructor(
     private val tts: ArabicTextToSpeech,
     private val speechRecognizer: ArabicSpeechRecognizer,
-    private val claudeClient: ClaudeClient
+    private val geminiClient: GeminiClient
 ) {
     suspend fun runCall(
         prayer: Prayer,
@@ -63,12 +63,12 @@ class ConversationManager @Inject constructor(
             onEvent(CallEvent.UserHeard(heard.text))
             history.add(ConversationTurn("user", heard.text))
 
-            val reply = if (claudeClient.hasApiKey()) {
-                claudeClient.sendMessage(systemPrompt, history)
-                    .onFailure { onEvent(CallEvent.Debug("فشل الاتصال بـ Claude: ${it.message}")) }
+            val reply = if (geminiClient.hasApiKey()) {
+                geminiClient.sendMessage(systemPrompt, history)
+                    .onFailure { onEvent(CallEvent.Debug("فشل الاتصال بـ Gemini: ${it.message}")) }
                     .getOrNull()
             } else {
-                onEvent(CallEvent.Debug("لا يوجد مفتاح Anthropic API محفوظ"))
+                onEvent(CallEvent.Debug("لا يوجد مفتاح Gemini API محفوظ"))
                 null
             }
 

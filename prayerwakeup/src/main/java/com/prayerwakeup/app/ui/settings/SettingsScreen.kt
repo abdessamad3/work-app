@@ -170,13 +170,13 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
             Divider(Modifier.padding(vertical = 20.dp))
 
             SectionTitle("محادثة ذكية حقيقية (اختياري)")
-            Text("أضف مفتاح Anthropic API الخاص بك ليتحدث معك المتصل بشكل حقيقي ويرد على ما تقوله. بدون المفتاح، سيستخدم التطبيق جملاً ثابتة فقط.")
+            Text("أضف مفتاح Gemini API الخاص بك (مجاني من aistudio.google.com) ليتحدث معك المتصل بشكل حقيقي ويرد على ما تقوله. بدون المفتاح، سيستخدم التطبيق جملاً ثابتة فقط.")
             Spacer(Modifier.height(8.dp))
             var apiKeyField by remember(state.apiKey) { mutableStateOf(state.apiKey) }
             OutlinedTextField(
                 value = apiKeyField,
                 onValueChange = { apiKeyField = it },
-                label = { Text("Anthropic API Key") },
+                label = { Text("Gemini API Key") },
                 visualTransformation = PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth()
             )

@@ -16,9 +16,9 @@ import javax.inject.Singleton
 
 data class ConversationTurn(val role: String, val text: String)
 
-/** Minimal client for the Anthropic Messages API, used to drive the live wake-up conversation. */
+/** Minimal client for the Google Gemini API, used to drive the live wake-up conversation. */
 @Singleton
-class ClaudeClient @Inject constructor(
+class GeminiClient @Inject constructor(
     private val keyStore: SecureKeyStore
 ) {
     private val client = OkHttpClient.Builder()
@@ -31,22 +31,26 @@ class ClaudeClient @Inject constructor(
     suspend fun sendMessage(systemPrompt: String, history: List<ConversationTurn>): Result<String> =
         withContext(Dispatchers.IO) {
             val apiKey = keyStore.apiKey.value
-            if (apiKey.isBlank()) return@withContext Result.failure(IllegalStateException("No Anthropic API key configured"))
+            if (apiKey.isBlank()) return@withContext Result.failure(IllegalStateException("No Gemini API key configured"))
 
-            val messages = JSONArray().apply {
-                history.forEach { turn -> put(JSONObject().put("role", turn.role).put("content", turn.text)) }
+            val contents = JSONArray().apply {
+                history.forEach { turn ->
+                    val geminiRole = if (turn.role == "assistant") "model" else "user"
+                    put(
+                        JSONObject()
+                            .put("role", geminiRole)
+                            .put("parts", JSONArray().put(JSONObject().put("text", turn.text)))
+                    )
+                }
             }
             val requestJson = JSONObject().apply {
-                put("model", MODEL)
-                put("max_tokens", 300)
-                put("system", systemPrompt)
-                put("messages", messages)
+                put("system_instruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", systemPrompt))))
+                put("contents", contents)
+                put("generationConfig", JSONObject().put("maxOutputTokens", 300))
             }
 
             val request = Request.Builder()
-                .url("https://api.anthropic.com/v1/messages")
-                .addHeader("x-api-key", apiKey)
-                .addHeader("anthropic-version", "2023-06-01")
+                .url("https://generativelanguage.googleapis.com/v1beta/models/$MODEL:generateContent?key=$apiKey")
                 .addHeader("content-type", "application/json")
                 .post(requestJson.toString().toRequestBody("application/json".toMediaType()))
                 .build()
@@ -55,19 +59,20 @@ class ClaudeClient @Inject constructor(
                 client.newCall(request).execute().use { response ->
                     val bodyString = response.body?.string().orEmpty()
                     if (!response.isSuccessful) {
-                        return@withContext Result.failure(IOException("Anthropic API error ${response.code}: $bodyString"))
+                        return@withContext Result.failure(IOException("Gemini API error ${response.code}: $bodyString"))
                     }
                     val json = JSONObject(bodyString)
-                    val contentArray = json.optJSONArray("content")
+                    val candidates = json.optJSONArray("candidates")
                     val text = buildString {
-                        if (contentArray != null) {
-                            for (i in 0 until contentArray.length()) {
-                                val block = contentArray.getJSONObject(i)
-                                if (block.optString("type") == "text") append(block.optString("text"))
+                        val firstCandidate = candidates?.optJSONObject(0)
+                        val parts = firstCandidate?.optJSONObject("content")?.optJSONArray("parts")
+                        if (parts != null) {
+                            for (i in 0 until parts.length()) {
+                                append(parts.getJSONObject(i).optString("text"))
                             }
                         }
                     }.trim()
-                    if (text.isBlank()) Result.failure(IOException("Empty response")) else Result.success(text)
+                    if (text.isBlank()) Result.failure(IOException("Empty response: $bodyString")) else Result.success(text)
                 }
             } catch (e: IOException) {
                 Result.failure(e)
@@ -75,7 +80,7 @@ class ClaudeClient @Inject constructor(
         }
 
     private companion object {
-        // Latest Claude model at time of writing; change here to repoint the whole app.
-        const val MODEL = "claude-sonnet-5"
+        // Fast, free-tier-eligible Gemini model; change here to repoint the whole app.
+        const val MODEL = "gemini-2.0-flash"
     }
 }
