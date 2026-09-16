@@ -3,6 +3,8 @@ package com.prayerwakeup.app.ui.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.prayerwakeup.app.alarm.AlarmScheduler
+import com.prayerwakeup.app.conversation.ElevenLabsClient
+import com.prayerwakeup.app.conversation.ElevenLabsVoice
 import com.prayerwakeup.app.data.location.LocationProvider
 import com.prayerwakeup.app.data.remote.MoroccoCity
 import com.prayerwakeup.app.data.remote.MoroccoHabousClient
@@ -26,7 +28,8 @@ import javax.inject.Inject
 
 data class SettingsUiState(
     val settings: PrayerSettings = PrayerSettings(),
-    val apiKey: String = "",
+    val geminiApiKey: String = "",
+    val elevenLabsApiKey: String = "",
     val canScheduleExactAlarms: Boolean = true
 )
 
@@ -37,25 +40,38 @@ sealed interface MoroccoCitiesUiState {
     data class Error(val message: String) : MoroccoCitiesUiState
 }
 
+sealed interface ElevenLabsVoicesUiState {
+    data object Idle : ElevenLabsVoicesUiState
+    data object Loading : ElevenLabsVoicesUiState
+    data class Loaded(val voices: List<ElevenLabsVoice>) : ElevenLabsVoicesUiState
+    data class Error(val message: String) : ElevenLabsVoicesUiState
+}
+
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val secureKeyStore: SecureKeyStore,
     private val locationProvider: LocationProvider,
     private val alarmScheduler: AlarmScheduler,
-    private val moroccoHabousClient: MoroccoHabousClient
+    private val moroccoHabousClient: MoroccoHabousClient,
+    private val elevenLabsClient: ElevenLabsClient
 ) : ViewModel() {
 
     private val _moroccoCities = MutableStateFlow<MoroccoCitiesUiState>(MoroccoCitiesUiState.Idle)
     val moroccoCities: StateFlow<MoroccoCitiesUiState> = _moroccoCities.asStateFlow()
 
+    private val _elevenLabsVoices = MutableStateFlow<ElevenLabsVoicesUiState>(ElevenLabsVoicesUiState.Idle)
+    val elevenLabsVoices: StateFlow<ElevenLabsVoicesUiState> = _elevenLabsVoices.asStateFlow()
+
     val uiState: StateFlow<SettingsUiState> = combine(
         settingsRepository.settingsFlow,
-        secureKeyStore.apiKey
-    ) { settings, apiKey ->
+        secureKeyStore.geminiApiKey,
+        secureKeyStore.elevenLabsApiKey
+    ) { settings, geminiKey, elevenLabsKey ->
         SettingsUiState(
             settings = settings,
-            apiKey = apiKey,
+            geminiApiKey = geminiKey,
+            elevenLabsApiKey = elevenLabsKey,
             canScheduleExactAlarms = alarmScheduler.canScheduleExactAlarms()
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
@@ -121,8 +137,8 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.updatePersona(persona) }
     }
 
-    fun saveApiKey(key: String) {
-        secureKeyStore.setApiKey(key.trim())
+    fun saveGeminiApiKey(key: String) {
+        secureKeyStore.setGeminiApiKey(key.trim())
     }
 
     fun setPrayerTimeSource(source: PrayerTimeSource) {
@@ -149,5 +165,26 @@ class SettingsViewModel @Inject constructor(
             settingsRepository.updateMoroccoCity(city.id, city.displayLabel)
             alarmScheduler.rescheduleAll()
         }
+    }
+
+    fun saveElevenLabsApiKey(key: String) {
+        secureKeyStore.setElevenLabsApiKey(key.trim())
+    }
+
+    fun loadElevenLabsVoices() {
+        _elevenLabsVoices.value = ElevenLabsVoicesUiState.Loading
+        viewModelScope.launch {
+            elevenLabsClient.fetchVoices()
+                .onSuccess { _elevenLabsVoices.value = ElevenLabsVoicesUiState.Loaded(it) }
+                .onFailure { _elevenLabsVoices.value = ElevenLabsVoicesUiState.Error(it.message ?: "تعذر تحميل قائمة الأصوات") }
+        }
+    }
+
+    fun setElevenLabsVoice(voice: ElevenLabsVoice) {
+        viewModelScope.launch { settingsRepository.updateElevenLabsVoice(voice.id, voice.name) }
+    }
+
+    fun clearElevenLabsVoice() {
+        viewModelScope.launch { settingsRepository.updateElevenLabsVoice("", "") }
     }
 }

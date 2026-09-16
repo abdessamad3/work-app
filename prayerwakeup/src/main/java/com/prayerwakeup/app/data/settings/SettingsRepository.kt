@@ -41,6 +41,8 @@ class SettingsRepository @Inject constructor(
         val PRAYER_TIME_SOURCE = stringPreferencesKey("prayer_time_source")
         val MOROCCO_CITY_ID = intPreferencesKey("morocco_city_id")
         val MOROCCO_CITY_LABEL = stringPreferencesKey("morocco_city_label")
+        val ELEVENLABS_VOICE_ID = stringPreferencesKey("elevenlabs_voice_id")
+        val ELEVENLABS_VOICE_LABEL = stringPreferencesKey("elevenlabs_voice_label")
     }
 
     val settingsFlow: Flow<PrayerSettings> = context.settingsDataStore.data.map { prefs ->
@@ -66,7 +68,9 @@ class SettingsRepository @Inject constructor(
             prayerTimeSource = prefs[Keys.PRAYER_TIME_SOURCE]?.let { runCatching { PrayerTimeSource.valueOf(it) }.getOrNull() }
                 ?: defaults.prayerTimeSource,
             moroccoCityId = prefs[Keys.MOROCCO_CITY_ID],
-            moroccoCityLabel = prefs[Keys.MOROCCO_CITY_LABEL] ?: defaults.moroccoCityLabel
+            moroccoCityLabel = prefs[Keys.MOROCCO_CITY_LABEL] ?: defaults.moroccoCityLabel,
+            elevenLabsVoiceId = prefs[Keys.ELEVENLABS_VOICE_ID] ?: defaults.elevenLabsVoiceId,
+            elevenLabsVoiceLabel = prefs[Keys.ELEVENLABS_VOICE_LABEL] ?: defaults.elevenLabsVoiceLabel
         )
     }
 
@@ -116,6 +120,13 @@ class SettingsRepository @Inject constructor(
         context.settingsDataStore.edit { prefs ->
             prefs[Keys.MOROCCO_CITY_ID] = cityId
             prefs[Keys.MOROCCO_CITY_LABEL] = label
+        }
+    }
+
+    suspend fun updateElevenLabsVoice(voiceId: String, label: String) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[Keys.ELEVENLABS_VOICE_ID] = voiceId
+            prefs[Keys.ELEVENLABS_VOICE_LABEL] = label
         }
     }
 }

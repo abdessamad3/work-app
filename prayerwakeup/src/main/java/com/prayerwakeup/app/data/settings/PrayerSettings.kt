@@ -21,5 +21,7 @@ data class PrayerSettings(
     val onboardingComplete: Boolean = false,
     val prayerTimeSource: PrayerTimeSource = PrayerTimeSource.OFFLINE_CALCULATION,
     val moroccoCityId: Int? = null,
-    val moroccoCityLabel: String = ""
+    val moroccoCityLabel: String = "",
+    val elevenLabsVoiceId: String = "",
+    val elevenLabsVoiceLabel: String = ""
 )

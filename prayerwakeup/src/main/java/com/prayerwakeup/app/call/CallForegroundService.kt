@@ -87,6 +87,7 @@ class CallForegroundService : Service() {
             prayer = prayer,
             persona = settings.persona,
             maxTurns = maxTurns,
+            elevenLabsVoiceId = settings.elevenLabsVoiceId.ifBlank { null },
             isCancelled = { cancelled.get() }
         ) { event ->
             when (event) {

@@ -187,16 +187,37 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
             SectionTitle("محادثة ذكية حقيقية (اختياري)")
             Text("أضف مفتاح Gemini API الخاص بك (مجاني من aistudio.google.com) ليتحدث معك المتصل بشكل حقيقي ويرد على ما تقوله. بدون المفتاح، سيستخدم التطبيق جملاً ثابتة فقط.")
             Spacer(Modifier.height(8.dp))
-            var apiKeyField by remember(state.apiKey) { mutableStateOf(state.apiKey) }
+            var geminiKeyField by remember(state.geminiApiKey) { mutableStateOf(state.geminiApiKey) }
             OutlinedTextField(
-                value = apiKeyField,
-                onValueChange = { apiKeyField = it },
+                value = geminiKeyField,
+                onValueChange = { geminiKeyField = it },
                 label = { Text("Gemini API Key") },
                 visualTransformation = PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(Modifier.height(8.dp))
-            Button(onClick = { viewModel.saveApiKey(apiKeyField) }) { Text("حفظ المفتاح") }
+            Button(onClick = { viewModel.saveGeminiApiKey(geminiKeyField) }) { Text("حفظ المفتاح") }
+
+            Divider(Modifier.padding(vertical = 20.dp))
+
+            SectionTitle("صوت طبيعي مخصص (ElevenLabs، اختياري)")
+            Text("أضف مفتاح ElevenLabs API (مجاني من elevenlabs.io) واختر صوتاً من مكتبتك ليتحدث به المتصل بدلاً من صوت النظام الافتراضي. الخطة المجانية تتيح أصواتاً جاهزة عالية الجودة، وليس استنساخ صوتك الخاص (يتطلب خطة مدفوعة).")
+            Spacer(Modifier.height(8.dp))
+            var elevenLabsKeyField by remember(state.elevenLabsApiKey) { mutableStateOf(state.elevenLabsApiKey) }
+            OutlinedTextField(
+                value = elevenLabsKeyField,
+                onValueChange = { elevenLabsKeyField = it },
+                label = { Text("ElevenLabs API Key") },
+                visualTransformation = PasswordVisualTransformation(),
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(8.dp))
+            Button(onClick = { viewModel.saveElevenLabsApiKey(elevenLabsKeyField) }) { Text("حفظ المفتاح") }
+            Spacer(Modifier.height(12.dp))
+            ElevenLabsVoiceSection(
+                viewModel = viewModel,
+                selectedVoiceLabel = state.settings.elevenLabsVoiceLabel
+            )
 
             Divider(Modifier.padding(vertical = 20.dp))
 
@@ -314,6 +335,55 @@ private fun MoroccoCitySection(viewModel: SettingsViewModel, selectedCityLabel: 
                                 onClick = { viewModel.setMoroccoCity(city) }
                             )
                             Text(city.displayLabel, modifier = Modifier.padding(top = 12.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ElevenLabsVoiceSection(viewModel: SettingsViewModel, selectedVoiceLabel: String) {
+    val voicesState by viewModel.elevenLabsVoices.collectAsState()
+
+    Column {
+        Text(
+            if (selectedVoiceLabel.isNotBlank()) "الصوت المختار: $selectedVoiceLabel (سيُستخدم دائماً كخيار أول، مع الرجوع لصوت النظام تلقائياً عند أي عطل)"
+            else "لم يُختر صوت بعد — سيستخدم التطبيق صوت النظام الافتراضي",
+            style = MaterialTheme.typography.bodyMedium
+        )
+        Spacer(Modifier.height(8.dp))
+        if (selectedVoiceLabel.isNotBlank()) {
+            TextButton(onClick = { viewModel.clearElevenLabsVoice() }) { Text("الرجوع لصوت النظام الافتراضي") }
+            Spacer(Modifier.height(4.dp))
+        }
+
+        when (val s = voicesState) {
+            is ElevenLabsVoicesUiState.Idle -> {
+                Button(onClick = { viewModel.loadElevenLabsVoices() }) { Text("تحميل قائمة الأصوات") }
+            }
+            is ElevenLabsVoicesUiState.Loading -> {
+                Text("جارٍ تحميل قائمة الأصوات...", color = MaterialTheme.colorScheme.outline)
+            }
+            is ElevenLabsVoicesUiState.Error -> {
+                Text(
+                    "تعذر تحميل قائمة الأصوات: ${s.message}. سيُستخدم صوت النظام الافتراضي تلقائياً حتى تعاود المحاولة.",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Spacer(Modifier.height(8.dp))
+                TextButton(onClick = { viewModel.loadElevenLabsVoices() }) { Text("إعادة المحاولة") }
+            }
+            is ElevenLabsVoicesUiState.Loaded -> {
+                Column {
+                    s.voices.forEach { voice ->
+                        Row {
+                            RadioButton(
+                                selected = selectedVoiceLabel == voice.name,
+                                onClick = { viewModel.setElevenLabsVoice(voice) }
+                            )
+                            Text(voice.name, modifier = Modifier.padding(top = 12.dp))
                         }
                     }
                 }

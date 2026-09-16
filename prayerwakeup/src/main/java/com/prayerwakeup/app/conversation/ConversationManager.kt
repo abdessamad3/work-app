@@ -24,12 +24,14 @@ sealed interface CallEvent {
 class ConversationManager @Inject constructor(
     private val tts: ArabicTextToSpeech,
     private val speechRecognizer: ArabicSpeechRecognizer,
-    private val geminiClient: GeminiClient
+    private val geminiClient: GeminiClient,
+    private val elevenLabsClient: ElevenLabsClient
 ) {
     suspend fun runCall(
         prayer: Prayer,
         persona: CallerPersona,
         maxTurns: Int,
+        elevenLabsVoiceId: String?,
         isCancelled: () -> Boolean,
         onEvent: suspend (CallEvent) -> Unit
     ) {
@@ -39,9 +41,18 @@ class ConversationManager @Inject constructor(
         var turn = 0
         var ended = false
 
+        suspend fun speak(text: String) {
+            if (!elevenLabsVoiceId.isNullOrBlank() && elevenLabsClient.hasApiKey()) {
+                val result = elevenLabsClient.speak(text, elevenLabsVoiceId)
+                if (result.isSuccess) return
+                onEvent(CallEvent.Debug("فشل صوت ElevenLabs، تم الرجوع للصوت الافتراضي: ${result.exceptionOrNull()?.message}"))
+            }
+            tts.speak(text)
+        }
+
         while (!ended && turn < maxTurns && !isCancelled()) {
             onEvent(CallEvent.AgentSpeaking(nextLine))
-            tts.speak(nextLine)
+            speak(nextLine)
             history.add(ConversationTurn("assistant", nextLine))
             if (isCancelled()) break
 
@@ -81,7 +92,7 @@ class ConversationManager @Inject constructor(
                 val clean = reply.replace(PersonaPrompts.END_CALL_TAG, "").trim()
                 val closing = clean.ifBlank { PersonaPrompts.closingLine() }
                 onEvent(CallEvent.AgentSpeaking(closing))
-                tts.speak(closing)
+                speak(closing)
                 history.add(ConversationTurn("assistant", closing))
                 ended = true
             } else {

@@ -26,11 +26,11 @@ class GeminiClient @Inject constructor(
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
-    fun hasApiKey(): Boolean = keyStore.hasApiKey()
+    fun hasApiKey(): Boolean = keyStore.hasGeminiApiKey()
 
     suspend fun sendMessage(systemPrompt: String, history: List<ConversationTurn>): Result<String> =
         withContext(Dispatchers.IO) {
-            val apiKey = keyStore.apiKey.value
+            val apiKey = keyStore.geminiApiKey.value
             if (apiKey.isBlank()) return@withContext Result.failure(IllegalStateException("No Gemini API key configured"))
 
             val contents = JSONArray().apply {

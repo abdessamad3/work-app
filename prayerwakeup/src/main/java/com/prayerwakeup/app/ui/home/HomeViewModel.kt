@@ -50,7 +50,7 @@ class HomeViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            combine(settingsRepository.settingsFlow, secureKeyStore.apiKey) { settings, apiKey -> settings to apiKey }
+            combine(settingsRepository.settingsFlow, secureKeyStore.geminiApiKey) { settings, apiKey -> settings to apiKey }
                 .collect { (settings, apiKey) -> applySettings(settings, apiKey.isNotBlank()) }
         }
     }
@@ -58,7 +58,7 @@ class HomeViewModel @Inject constructor(
     fun refreshNow() {
         viewModelScope.launch {
             val settings = settingsRepository.settingsFlow.first()
-            applySettings(settings, secureKeyStore.hasApiKey())
+            applySettings(settings, secureKeyStore.hasGeminiApiKey())
         }
     }
 

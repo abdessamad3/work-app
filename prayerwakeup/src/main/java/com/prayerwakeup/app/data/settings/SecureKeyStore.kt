@@ -11,9 +11,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Stores the user's Gemini API key encrypted at rest, on-device only.
- * The key is never bundled with the app or sent anywhere except directly
- * to generativelanguage.googleapis.com when placing a call.
+ * Stores the user's API keys encrypted at rest, on-device only. Each key is never bundled
+ * with the app or sent anywhere except directly to its own provider's API when placing a call
+ * (Gemini's key to generativelanguage.googleapis.com, ElevenLabs' key to api.elevenlabs.io).
  */
 @Singleton
 class SecureKeyStore @Inject constructor(
@@ -32,17 +32,28 @@ class SecureKeyStore @Inject constructor(
         )
     }
 
-    private val _apiKey = MutableStateFlow(prefs.getString(KEY_GEMINI_API_KEY, null).orEmpty())
-    val apiKey: StateFlow<String> = _apiKey.asStateFlow()
+    private val _geminiApiKey = MutableStateFlow(prefs.getString(KEY_GEMINI_API_KEY, null).orEmpty())
+    val geminiApiKey: StateFlow<String> = _geminiApiKey.asStateFlow()
 
-    fun setApiKey(key: String) {
+    fun setGeminiApiKey(key: String) {
         prefs.edit().putString(KEY_GEMINI_API_KEY, key).apply()
-        _apiKey.value = key
+        _geminiApiKey.value = key
     }
 
-    fun hasApiKey(): Boolean = _apiKey.value.isNotBlank()
+    fun hasGeminiApiKey(): Boolean = _geminiApiKey.value.isNotBlank()
+
+    private val _elevenLabsApiKey = MutableStateFlow(prefs.getString(KEY_ELEVENLABS_API_KEY, null).orEmpty())
+    val elevenLabsApiKey: StateFlow<String> = _elevenLabsApiKey.asStateFlow()
+
+    fun setElevenLabsApiKey(key: String) {
+        prefs.edit().putString(KEY_ELEVENLABS_API_KEY, key).apply()
+        _elevenLabsApiKey.value = key
+    }
+
+    fun hasElevenLabsApiKey(): Boolean = _elevenLabsApiKey.value.isNotBlank()
 
     private companion object {
         const val KEY_GEMINI_API_KEY = "gemini_api_key"
+        const val KEY_ELEVENLABS_API_KEY = "elevenlabs_api_key"
     }
 }
