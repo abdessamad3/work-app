@@ -64,8 +64,11 @@ class ConversationManager @Inject constructor(
             history.add(ConversationTurn("user", heard.text))
 
             val reply = if (claudeClient.hasApiKey()) {
-                claudeClient.sendMessage(systemPrompt, history).getOrNull()
+                claudeClient.sendMessage(systemPrompt, history)
+                    .onFailure { onEvent(CallEvent.Debug("فشل الاتصال بـ Claude: ${it.message}")) }
+                    .getOrNull()
             } else {
+                onEvent(CallEvent.Debug("لا يوجد مفتاح Anthropic API محفوظ"))
                 null
             }
 
