@@ -81,6 +81,6 @@ class GeminiClient @Inject constructor(
 
     private companion object {
         // Fast, free-tier-eligible Gemini model; change here to repoint the whole app.
-        const val MODEL = "gemini-2.0-flash"
+        const val MODEL = "gemini-3.6-flash"
     }
 }
