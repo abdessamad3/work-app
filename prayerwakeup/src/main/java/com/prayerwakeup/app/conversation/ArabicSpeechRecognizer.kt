@@ -1,11 +1,13 @@
 package com.prayerwakeup.app.conversation
 
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.speech.RecognitionListener
+import android.speech.RecognitionService
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -25,6 +27,31 @@ class ArabicSpeechRecognizer @Inject constructor(
 ) {
     fun isAvailable(): Boolean = SpeechRecognizer.isRecognitionAvailable(context)
 
+    /**
+     * Some OEM skins (seen on a Realme device) register their own RecognitionService as the
+     * system default, and it responds with a static placeholder instead of a real transcript.
+     * Prefer Google's speech service explicitly when it's installed, since it's the one that
+     * actually transcribes speech; only fall back to whatever the OS considers default if
+     * Google's isn't present on the device at all.
+     */
+    private class RecognizerHandle(val recognizer: SpeechRecognizer, val engineLabel: String)
+
+    private fun createBestRecognizer(context: Context): RecognizerHandle {
+        val googleService = runCatching {
+            context.packageManager
+                .queryIntentServices(Intent(RecognitionService.SERVICE_INTERFACE), 0)
+                .firstOrNull { it.serviceInfo.packageName == "com.google.android.googlequicksearchbox" }
+                ?.serviceInfo
+                ?.let { ComponentName(it.packageName, it.name) }
+        }.getOrNull()
+
+        return if (googleService != null) {
+            RecognizerHandle(SpeechRecognizer.createSpeechRecognizer(context, googleService), "Google")
+        } else {
+            RecognizerHandle(SpeechRecognizer.createSpeechRecognizer(context), "افتراضي النظام")
+        }
+    }
+
     /** Listens once and returns the top transcript, or a diagnostic reason it heard nothing. */
     suspend fun listenOnce(timeoutMillis: Long = 9_000L): ListenResult = withContext(Dispatchers.Main) {
         if (!isAvailable()) {
@@ -32,7 +59,8 @@ class ArabicSpeechRecognizer @Inject constructor(
         }
 
         suspendCancellableCoroutine { continuation ->
-            val recognizer = SpeechRecognizer.createSpeechRecognizer(context)
+            val handle = createBestRecognizer(context)
+            val recognizer = handle.recognizer
             var finished = false
             var speechDetected = false
             var maxRms = -100f
@@ -49,7 +77,7 @@ class ArabicSpeechRecognizer @Inject constructor(
                     else -> "لم يُلتقط أي صوت من الميكروفون"
                 }
                 val partial = lastPartial?.let { " — آخر تخمين جزئي: \"$it\"" }.orEmpty()
-                return "$base ($micState)$partial"
+                return "$base (المحرك: ${handle.engineLabel}، $micState)$partial"
             }
 
             fun finish(result: ListenResult) {
