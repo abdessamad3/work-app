@@ -29,9 +29,20 @@ data class MoroccoCity(val id: Int, val nameAr: String, val nameFr: String) {
  */
 @Singleton
 class MoroccoHabousClient @Inject constructor() {
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(8, TimeUnit.SECONDS)
-        .readTimeout(8, TimeUnit.SECONDS)
+    // Free Render.com hosting (this service's host) sleeps after inactivity and can take
+    // 30-60s to wake up and answer the first request after a while. The city list is loaded
+    // interactively from Settings (a spinner is fine to show for a while), so it gets a long
+    // timeout to ride out that wake-up. fetchTodayTimes(), by contrast, can run inside a
+    // BroadcastReceiver's goAsync() window (boot, daily refresh) where blocking for up to a
+    // minute is risky, so it stays on a short timeout and simply falls back to the offline
+    // calculator if the service isn't already awake.
+    private val interactiveClient = OkHttpClient.Builder()
+        .connectTimeout(50, TimeUnit.SECONDS)
+        .readTimeout(50, TimeUnit.SECONDS)
+        .build()
+    private val backgroundClient = OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(10, TimeUnit.SECONDS)
         .build()
 
     // Two known (undocumented/unstable) route shapes exist for this service across its history;
@@ -39,6 +50,7 @@ class MoroccoHabousClient @Inject constructor() {
     // so a URL that answers with an unexpected shape doesn't stop a working fallback from trying.
     suspend fun fetchCities(): Result<List<MoroccoCity>> = withContext(Dispatchers.IO) {
         fetchFirstWorking(
+            client = interactiveClient,
             urls = listOf("$BASE_URL/api/v1/available-cities", "$BASE_URL/cities"),
             fallbackError = "لا يمكن الوصول إلى خدمة المدن",
             parse = ::parseCities
@@ -48,16 +60,17 @@ class MoroccoHabousClient @Inject constructor() {
     suspend fun fetchTodayTimes(cityId: Int, date: LocalDate, zoneId: ZoneId): Result<Map<Prayer, ZonedDateTime>> =
         withContext(Dispatchers.IO) {
             fetchFirstWorking(
+                client = backgroundClient,
                 urls = listOf("$BASE_URL/api/v1/prayer-times?cityId=$cityId", "$BASE_URL/$cityId/today"),
                 fallbackError = "لا يمكن الوصول إلى خدمة مواقيت الصلاة",
                 parse = { body -> parseTimes(body, date, zoneId) }
             )
         }
 
-    private fun <T> fetchFirstWorking(urls: List<String>, fallbackError: String, parse: (String) -> T): Result<T> {
+    private fun <T> fetchFirstWorking(client: OkHttpClient, urls: List<String>, fallbackError: String, parse: (String) -> T): Result<T> {
         var lastError: Throwable = IOException(fallbackError)
         for (url in urls) {
-            val body = get(url) ?: continue
+            val body = get(client, url) ?: continue
             val result = runCatching { parse(body) }
             if (result.isSuccess) return result
             lastError = result.exceptionOrNull() ?: lastError
@@ -65,7 +78,7 @@ class MoroccoHabousClient @Inject constructor() {
         return Result.failure(lastError)
     }
 
-    private fun get(url: String): String? {
+    private fun get(client: OkHttpClient, url: String): String? {
         val request = Request.Builder().url(url).get().build()
         return runCatching {
             client.newCall(request).execute().use { response ->

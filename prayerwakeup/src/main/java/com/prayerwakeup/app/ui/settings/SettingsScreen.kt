@@ -291,7 +291,10 @@ private fun MoroccoCitySection(viewModel: SettingsViewModel, selectedCityLabel: 
                 Button(onClick = { viewModel.loadMoroccoCities() }) { Text("تحميل قائمة المدن") }
             }
             is MoroccoCitiesUiState.Loading -> {
-                Text("جارٍ تحميل قائمة المدن...", color = MaterialTheme.colorScheme.outline)
+                Text(
+                    "جارٍ تحميل قائمة المدن... قد يستغرق الأمر حتى دقيقة عند أول استخدام (الخدمة تحتاج للاستيقاظ).",
+                    color = MaterialTheme.colorScheme.outline
+                )
             }
             is MoroccoCitiesUiState.Error -> {
                 Text(
