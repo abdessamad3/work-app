@@ -7,11 +7,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.prayerwakeup.app.alarm.AlarmScheduler
 import com.prayerwakeup.app.call.CallForegroundService
+import com.prayerwakeup.app.data.PrayerTimesResolver
 import com.prayerwakeup.app.data.settings.PrayerSettings
 import com.prayerwakeup.app.data.settings.SecureKeyStore
 import com.prayerwakeup.app.data.settings.SettingsRepository
 import com.prayerwakeup.app.domain.Prayer
-import com.prayerwakeup.app.domain.PrayerTimeCalculator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,7 +41,7 @@ class HomeViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val settingsRepository: SettingsRepository,
     private val alarmScheduler: AlarmScheduler,
-    private val calculator: PrayerTimeCalculator,
+    private val timesResolver: PrayerTimesResolver,
     private val secureKeyStore: SecureKeyStore
 ) : ViewModel() {
 
@@ -62,7 +62,7 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    private fun applySettings(settings: PrayerSettings, hasApiKey: Boolean) {
+    private suspend fun applySettings(settings: PrayerSettings, hasApiKey: Boolean) {
         if (!settings.hasLocation) {
             _uiState.value = HomeUiState(
                 loading = false,
@@ -75,9 +75,7 @@ class HomeViewModel @Inject constructor(
         }
         val zoneId = runCatching { ZoneId.of(settings.timeZoneId) }.getOrDefault(ZoneId.systemDefault())
         val now = ZonedDateTime.now(zoneId)
-        val times = calculator.calculate(
-            now.toLocalDate(), settings.latitude, settings.longitude, zoneId, settings.calculationMethod, settings.madhab
-        )
+        val times = timesResolver.resolveForDate(settings, now.toLocalDate(), zoneId)
         val ordered = listOf(
             Prayer.FAJR to times.fajr,
             Prayer.DHUHR to times.dhuhr,

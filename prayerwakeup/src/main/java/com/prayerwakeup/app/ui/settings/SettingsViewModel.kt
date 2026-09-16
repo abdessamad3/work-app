@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.prayerwakeup.app.alarm.AlarmScheduler
 import com.prayerwakeup.app.data.location.LocationProvider
+import com.prayerwakeup.app.data.remote.MoroccoCity
+import com.prayerwakeup.app.data.remote.MoroccoHabousClient
 import com.prayerwakeup.app.data.settings.PrayerSettings
 import com.prayerwakeup.app.data.settings.SecureKeyStore
 import com.prayerwakeup.app.data.settings.SettingsRepository
@@ -11,9 +13,12 @@ import com.prayerwakeup.app.domain.CalculationMethod
 import com.prayerwakeup.app.domain.CallerPersona
 import com.prayerwakeup.app.domain.Madhab
 import com.prayerwakeup.app.domain.Prayer
+import com.prayerwakeup.app.domain.PrayerTimeSource
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -25,13 +30,24 @@ data class SettingsUiState(
     val canScheduleExactAlarms: Boolean = true
 )
 
+sealed interface MoroccoCitiesUiState {
+    data object Idle : MoroccoCitiesUiState
+    data object Loading : MoroccoCitiesUiState
+    data class Loaded(val cities: List<MoroccoCity>) : MoroccoCitiesUiState
+    data class Error(val message: String) : MoroccoCitiesUiState
+}
+
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val secureKeyStore: SecureKeyStore,
     private val locationProvider: LocationProvider,
-    private val alarmScheduler: AlarmScheduler
+    private val alarmScheduler: AlarmScheduler,
+    private val moroccoHabousClient: MoroccoHabousClient
 ) : ViewModel() {
+
+    private val _moroccoCities = MutableStateFlow<MoroccoCitiesUiState>(MoroccoCitiesUiState.Idle)
+    val moroccoCities: StateFlow<MoroccoCitiesUiState> = _moroccoCities.asStateFlow()
 
     val uiState: StateFlow<SettingsUiState> = combine(
         settingsRepository.settingsFlow,
@@ -107,5 +123,31 @@ class SettingsViewModel @Inject constructor(
 
     fun saveApiKey(key: String) {
         secureKeyStore.setApiKey(key.trim())
+    }
+
+    fun setPrayerTimeSource(source: PrayerTimeSource) {
+        viewModelScope.launch {
+            settingsRepository.updatePrayerTimeSource(source)
+            alarmScheduler.rescheduleAll()
+        }
+        if (source == PrayerTimeSource.MOROCCO_HABOUS && _moroccoCities.value is MoroccoCitiesUiState.Idle) {
+            loadMoroccoCities()
+        }
+    }
+
+    fun loadMoroccoCities() {
+        _moroccoCities.value = MoroccoCitiesUiState.Loading
+        viewModelScope.launch {
+            moroccoHabousClient.fetchCities()
+                .onSuccess { _moroccoCities.value = MoroccoCitiesUiState.Loaded(it) }
+                .onFailure { _moroccoCities.value = MoroccoCitiesUiState.Error(it.message ?: "تعذر تحميل قائمة المدن") }
+        }
+    }
+
+    fun setMoroccoCity(city: MoroccoCity) {
+        viewModelScope.launch {
+            settingsRepository.updateMoroccoCity(city.id, city.displayLabel)
+            alarmScheduler.rescheduleAll()
+        }
     }
 }

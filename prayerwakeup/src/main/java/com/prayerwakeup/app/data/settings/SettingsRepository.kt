@@ -12,6 +12,7 @@ import com.prayerwakeup.app.domain.CalculationMethod
 import com.prayerwakeup.app.domain.CallerPersona
 import com.prayerwakeup.app.domain.Madhab
 import com.prayerwakeup.app.domain.Prayer
+import com.prayerwakeup.app.domain.PrayerTimeSource
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -37,6 +38,9 @@ class SettingsRepository @Inject constructor(
         val MAX_CALL_MINUTES = intPreferencesKey("max_call_minutes")
         val PERSONA = stringPreferencesKey("persona")
         val ONBOARDING_COMPLETE = booleanPreferencesKey("onboarding_complete")
+        val PRAYER_TIME_SOURCE = stringPreferencesKey("prayer_time_source")
+        val MOROCCO_CITY_ID = intPreferencesKey("morocco_city_id")
+        val MOROCCO_CITY_LABEL = stringPreferencesKey("morocco_city_label")
     }
 
     val settingsFlow: Flow<PrayerSettings> = context.settingsDataStore.data.map { prefs ->
@@ -58,7 +62,11 @@ class SettingsRepository @Inject constructor(
             snoozeMinutes = prefs[Keys.SNOOZE_MINUTES] ?: defaults.snoozeMinutes,
             maxCallMinutes = prefs[Keys.MAX_CALL_MINUTES] ?: defaults.maxCallMinutes,
             persona = prefs[Keys.PERSONA]?.let { runCatching { CallerPersona.valueOf(it) }.getOrNull() } ?: defaults.persona,
-            onboardingComplete = prefs[Keys.ONBOARDING_COMPLETE] ?: defaults.onboardingComplete
+            onboardingComplete = prefs[Keys.ONBOARDING_COMPLETE] ?: defaults.onboardingComplete,
+            prayerTimeSource = prefs[Keys.PRAYER_TIME_SOURCE]?.let { runCatching { PrayerTimeSource.valueOf(it) }.getOrNull() }
+                ?: defaults.prayerTimeSource,
+            moroccoCityId = prefs[Keys.MOROCCO_CITY_ID],
+            moroccoCityLabel = prefs[Keys.MOROCCO_CITY_LABEL] ?: defaults.moroccoCityLabel
         )
     }
 
@@ -98,5 +106,16 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setOnboardingComplete(complete: Boolean) {
         context.settingsDataStore.edit { it[Keys.ONBOARDING_COMPLETE] = complete }
+    }
+
+    suspend fun updatePrayerTimeSource(source: PrayerTimeSource) {
+        context.settingsDataStore.edit { it[Keys.PRAYER_TIME_SOURCE] = source.name }
+    }
+
+    suspend fun updateMoroccoCity(cityId: Int, label: String) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[Keys.MOROCCO_CITY_ID] = cityId
+            prefs[Keys.MOROCCO_CITY_LABEL] = label
+        }
     }
 }

@@ -45,6 +45,7 @@ import com.prayerwakeup.app.domain.CalculationMethod
 import com.prayerwakeup.app.domain.CallerPersona
 import com.prayerwakeup.app.domain.Madhab
 import com.prayerwakeup.app.domain.Prayer
+import com.prayerwakeup.app.domain.PrayerTimeSource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -106,7 +107,21 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
 
             Divider(Modifier.padding(vertical = 20.dp))
 
-            SectionTitle("طريقة حساب المواقيت")
+            SectionTitle("مصدر مواقيت الصلاة")
+            PrayerTimeSource.entries.forEach { source ->
+                RadioRow(
+                    label = source.displayName,
+                    selected = state.settings.prayerTimeSource == source,
+                    onClick = { viewModel.setPrayerTimeSource(source) }
+                )
+            }
+            if (state.settings.prayerTimeSource == PrayerTimeSource.MOROCCO_HABOUS) {
+                MoroccoCitySection(viewModel = viewModel, selectedCityLabel = state.settings.moroccoCityLabel)
+            }
+
+            Divider(Modifier.padding(vertical = 20.dp))
+
+            SectionTitle("طريقة حساب المواقيت (احتياطية دائماً، ومستخدمة كاملة إن اخترت \"حساب فلكي\")")
             CalculationMethod.entries.forEach { method ->
                 RadioRow(
                     label = method.displayName,
@@ -253,6 +268,54 @@ private fun Stepper(value: Int, range: IntRange, onChange: (Int) -> Unit) {
         OutlinedButton(onClick = { if (value - 1 >= range.first) onChange(value - 1) }) { Text("-") }
         Text("$value", modifier = Modifier.padding(horizontal = 16.dp))
         OutlinedButton(onClick = { if (value + 1 <= range.last) onChange(value + 1) }) { Text("+") }
+    }
+}
+
+@Composable
+private fun MoroccoCitySection(viewModel: SettingsViewModel, selectedCityLabel: String) {
+    val citiesState by viewModel.moroccoCities.collectAsState()
+
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        if (citiesState is MoroccoCitiesUiState.Idle) viewModel.loadMoroccoCities()
+    }
+
+    Column(Modifier.padding(top = 8.dp, start = 40.dp)) {
+        Text(
+            if (selectedCityLabel.isNotBlank()) "المدينة المختارة: $selectedCityLabel" else "لم تُختر مدينة بعد",
+            style = MaterialTheme.typography.bodyMedium
+        )
+        Spacer(Modifier.height(8.dp))
+
+        when (val s = citiesState) {
+            is MoroccoCitiesUiState.Idle -> {
+                Button(onClick = { viewModel.loadMoroccoCities() }) { Text("تحميل قائمة المدن") }
+            }
+            is MoroccoCitiesUiState.Loading -> {
+                Text("جارٍ تحميل قائمة المدن...", color = MaterialTheme.colorScheme.outline)
+            }
+            is MoroccoCitiesUiState.Error -> {
+                Text(
+                    "تعذر تحميل قائمة المدن: ${s.message}. سيُستخدم الحساب الفلكي بدلاً منها تلقائياً حتى تعاود المحاولة.",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Spacer(Modifier.height(8.dp))
+                TextButton(onClick = { viewModel.loadMoroccoCities() }) { Text("إعادة المحاولة") }
+            }
+            is MoroccoCitiesUiState.Loaded -> {
+                Column {
+                    s.cities.forEach { city ->
+                        Row {
+                            RadioButton(
+                                selected = selectedCityLabel == city.displayLabel,
+                                onClick = { viewModel.setMoroccoCity(city) }
+                            )
+                            Text(city.displayLabel, modifier = Modifier.padding(top = 12.dp))
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

@@ -4,6 +4,7 @@ import com.prayerwakeup.app.domain.CalculationMethod
 import com.prayerwakeup.app.domain.CallerPersona
 import com.prayerwakeup.app.domain.Madhab
 import com.prayerwakeup.app.domain.Prayer
+import com.prayerwakeup.app.domain.PrayerTimeSource
 
 data class PrayerSettings(
     val hasLocation: Boolean = false,
@@ -17,5 +18,8 @@ data class PrayerSettings(
     val snoozeMinutes: Int = 5,
     val maxCallMinutes: Int = 3,
     val persona: CallerPersona = CallerPersona.FIRM,
-    val onboardingComplete: Boolean = false
+    val onboardingComplete: Boolean = false,
+    val prayerTimeSource: PrayerTimeSource = PrayerTimeSource.OFFLINE_CALCULATION,
+    val moroccoCityId: Int? = null,
+    val moroccoCityLabel: String = ""
 )

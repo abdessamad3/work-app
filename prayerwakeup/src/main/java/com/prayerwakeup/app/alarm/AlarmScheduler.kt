@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import com.prayerwakeup.app.data.PrayerTimesResolver
 import com.prayerwakeup.app.data.settings.SettingsRepository
 import com.prayerwakeup.app.domain.Prayer
 import com.prayerwakeup.app.domain.PrayerTimeCalculator
@@ -19,7 +20,8 @@ import javax.inject.Singleton
 class AlarmScheduler @Inject constructor(
     @ApplicationContext private val context: Context,
     private val settingsRepository: SettingsRepository,
-    private val calculator: PrayerTimeCalculator
+    private val calculator: PrayerTimeCalculator,
+    private val timesResolver: PrayerTimesResolver
 ) {
     private val alarmManager: AlarmManager?
         get() = context.getSystemService(AlarmManager::class.java)
@@ -35,9 +37,10 @@ class AlarmScheduler @Inject constructor(
         val now = ZonedDateTime.now(zoneId)
         val today = now.toLocalDate()
 
-        val todayTimes = calculator.calculate(
-            today, settings.latitude, settings.longitude, zoneId, settings.calculationMethod, settings.madhab
-        )
+        // Tomorrow always comes from the offline calculator: the online Moroccan source only
+        // exposes "today", and we never want an unreachable third-party service to be able to
+        // leave a prayer unscheduled.
+        val todayTimes = timesResolver.resolveForDate(settings, today, zoneId)
         val tomorrowTimes = calculator.calculate(
             today.plusDays(1), settings.latitude, settings.longitude, zoneId, settings.calculationMethod, settings.madhab
         )
