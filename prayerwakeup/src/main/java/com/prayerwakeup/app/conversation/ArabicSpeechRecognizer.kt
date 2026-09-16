@@ -89,18 +89,37 @@ class ArabicSpeechRecognizer @Inject constructor(
                 if (continuation.isActive) continuation.resume(result)
             }
 
+            // Google's on-device "final" pass is sometimes stricter than its streaming partial
+            // pass and rejects audio the partial pass already transcribed correctly (seen live:
+            // partial "أنا مستيقظ" followed by a final NO_MATCH). Rather than discard a decent
+            // partial guess when the final pass comes back empty, use it as the answer.
+            fun finishWithPartialFallback(diagnosticBase: String) {
+                val partial = lastPartial
+                if (!partial.isNullOrBlank()) {
+                    finish(ListenResult(partial))
+                } else {
+                    finish(ListenResult(null, withDiagnostics(diagnosticBase)))
+                }
+            }
+
             recognizer.setRecognitionListener(object : RecognitionListener {
                 override fun onResults(results: Bundle) {
                     val matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     val top = matches?.firstOrNull()
                     if (top.isNullOrBlank()) {
-                        finish(ListenResult(null, withDiagnostics("تعرّف بلا كلمات")))
+                        finishWithPartialFallback("تعرّف بلا كلمات")
                     } else {
                         finish(ListenResult(top))
                     }
                 }
 
-                override fun onError(error: Int) = finish(ListenResult(null, withDiagnostics(describeError(error))))
+                override fun onError(error: Int) {
+                    if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
+                        finishWithPartialFallback(describeError(error))
+                    } else {
+                        finish(ListenResult(null, withDiagnostics(describeError(error))))
+                    }
+                }
                 override fun onReadyForSpeech(params: Bundle?) = Unit
                 override fun onBeginningOfSpeech() {
                     speechDetected = true
@@ -125,8 +144,8 @@ class ArabicSpeechRecognizer @Inject constructor(
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ar-SA")
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1500)
-                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1500)
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2000)
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2000)
             }
 
             runCatching { recognizer.startListening(intent) }
