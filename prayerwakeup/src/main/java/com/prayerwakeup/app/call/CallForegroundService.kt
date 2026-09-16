@@ -37,14 +37,21 @@ class CallForegroundService : Service() {
     override fun onBind(intent: Intent?) = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_START_CALL) {
-            val prayerName = intent.getStringExtra(EXTRA_PRAYER)
-            val prayer = prayerName?.let { runCatching { Prayer.valueOf(it) }.getOrNull() }
-            if (prayer != null) {
-                beginCall(prayer)
-            } else {
-                stopSelf()
+        when (intent?.action) {
+            ACTION_START_CALL -> {
+                val prayerName = intent.getStringExtra(EXTRA_PRAYER)
+                val prayer = prayerName?.let { runCatching { Prayer.valueOf(it) }.getOrNull() }
+                if (prayer != null) {
+                    beginCall(prayer)
+                } else {
+                    stopSelf()
+                }
             }
+            // Handled directly here (not routed through sessionController.actions) so tapping
+            // "Decline" on the notification works reliably even in the rare case the service
+            // had to be freshly restarted to deliver this intent, when no collector would be
+            // listening on that flow yet.
+            ACTION_DECLINE_CALL -> handleDecline()
         }
         return START_NOT_STICKY
     }
@@ -64,7 +71,7 @@ class CallForegroundService : Service() {
                 // in-call Decline/hang-up immediately instead of queuing behind it.
                 when (action) {
                     CallAction.Answer -> launch { handleAnswer(prayer) }
-                    CallAction.Decline -> handleDecline(prayer)
+                    CallAction.Decline -> handleDecline()
                 }
             }
         }
@@ -104,11 +111,15 @@ class CallForegroundService : Service() {
         finishCall()
     }
 
-    private fun handleDecline(prayer: Prayer) {
+    private fun handleDecline() {
         cancelled.set(true)
         ringtonePlayer.stop()
         conversationManager.stop()
-        sessionController.endCall(prayer)
+        when (val state = sessionController.uiState.value) {
+            is CallUiState.Ringing -> sessionController.endCall(state.prayer)
+            is CallUiState.InCall -> sessionController.endCall(state.prayer)
+            else -> Unit
+        }
         finishCall()
     }
 
@@ -135,6 +146,13 @@ class CallForegroundService : Service() {
             this, 0, fullScreenIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+        val declineIntent = Intent(this, CallForegroundService::class.java).apply {
+            action = ACTION_DECLINE_CALL
+        }
+        val declinePendingIntent = PendingIntent.getService(
+            this, 1, declineIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
         val notification = NotificationCompat.Builder(this, PrayerWakeupApp.CALL_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setContentTitle("حان وقت صلاة ${prayer.arabicName}")
@@ -143,6 +161,7 @@ class CallForegroundService : Service() {
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setFullScreenIntent(fullScreenPendingIntent, true)
             .setContentIntent(fullScreenPendingIntent)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "رفض", declinePendingIntent)
             .setAutoCancel(true)
             .build()
         getSystemService(android.app.NotificationManager::class.java)
@@ -161,6 +180,7 @@ class CallForegroundService : Service() {
 
     companion object {
         const val ACTION_START_CALL = "com.prayerwakeup.app.action.START_CALL"
+        const val ACTION_DECLINE_CALL = "com.prayerwakeup.app.action.DECLINE_CALL"
         const val EXTRA_PRAYER = "extra_prayer"
         private const val NOTIFICATION_ID = 42
         private const val FULL_SCREEN_NOTIFICATION_ID = 43
