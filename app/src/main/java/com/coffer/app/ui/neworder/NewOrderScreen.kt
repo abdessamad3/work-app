@@ -35,9 +35,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,6 +51,8 @@ import com.coffer.app.domain.normalizeBarcode
 import com.coffer.app.ui.components.BarcodeScannerDialog
 import com.coffer.app.ui.components.ProductThumbnail
 import kotlinx.coroutines.flow.collectLatest
+import org.json.JSONArray
+import org.json.JSONObject
 
 private data class ItemDraft(
     val id: Int,
@@ -71,6 +73,45 @@ private fun ItemDraft.totalCents(): Long {
     return effectiveUnitPriceCents(Math.round(listVal * 100), discount) * qtyVal
 }
 
+/** Serializes the item drafts to a JSON string so the in-progress order survives rotation/process death. */
+private val ItemDraftListSaver = Saver<List<ItemDraft>, String>(
+    save = { list ->
+        JSONArray().apply {
+            list.forEach { d ->
+                put(
+                    JSONObject()
+                        .put("id", d.id)
+                        .put("productId", d.productId ?: JSONObject.NULL)
+                        .put("usingNewProduct", d.usingNewProduct)
+                        .put("newProductName", d.newProductName)
+                        .put("newProductBuyPrice", d.newProductBuyPrice)
+                        .put("newProductSellPrice", d.newProductSellPrice)
+                        .put("qty", d.qty)
+                        .put("listPrice", d.listPrice)
+                        .put("discountPercent", d.discountPercent)
+                )
+            }
+        }.toString()
+    },
+    restore = { json ->
+        val arr = JSONArray(json)
+        (0 until arr.length()).map { i ->
+            val o = arr.getJSONObject(i)
+            ItemDraft(
+                id = o.getInt("id"),
+                productId = if (o.isNull("productId")) null else o.getInt("productId"),
+                usingNewProduct = o.getBoolean("usingNewProduct"),
+                newProductName = o.getString("newProductName"),
+                newProductBuyPrice = o.getString("newProductBuyPrice"),
+                newProductSellPrice = o.getString("newProductSellPrice"),
+                qty = o.getString("qty"),
+                listPrice = o.getString("listPrice"),
+                discountPercent = o.getString("discountPercent")
+            )
+        }
+    }
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NewOrderScreen(
@@ -83,19 +124,19 @@ fun NewOrderScreen(
     val presetContact by viewModel.presetContact.collectAsState()
     val products by viewModel.products.collectAsState()
 
-    var isPurchase by remember { mutableStateOf(true) }
-    var selectedContactId by remember { mutableStateOf<Int?>(null) }
-    var usingNewContact by remember { mutableStateOf(false) }
-    var newContactName by remember { mutableStateOf("") }
-    var itemized by remember { mutableStateOf(false) }
-    var totalAmountText by remember { mutableStateOf("") }
-    var descriptionText by remember { mutableStateOf("") }
-    var paymentNowText by remember { mutableStateOf("") }
-    var errorText by remember { mutableStateOf<String?>(null) }
-    var nextItemId by remember { mutableIntStateOf(1) }
-    var items by remember { mutableStateOf(listOf(ItemDraft(0))) }
-    var scanTargetIndex by remember { mutableStateOf<Int?>(null) }
-    var scanNotFoundIndex by remember { mutableStateOf<Int?>(null) }
+    var isPurchase by rememberSaveable { mutableStateOf(true) }
+    var selectedContactId by rememberSaveable { mutableStateOf<Int?>(null) }
+    var usingNewContact by rememberSaveable { mutableStateOf(false) }
+    var newContactName by rememberSaveable { mutableStateOf("") }
+    var itemized by rememberSaveable { mutableStateOf(false) }
+    var totalAmountText by rememberSaveable { mutableStateOf("") }
+    var descriptionText by rememberSaveable { mutableStateOf("") }
+    var paymentNowText by rememberSaveable { mutableStateOf("") }
+    var errorText by rememberSaveable { mutableStateOf<String?>(null) }
+    var nextItemId by rememberSaveable { mutableStateOf(1) }
+    var items by rememberSaveable(stateSaver = ItemDraftListSaver) { mutableStateOf(listOf(ItemDraft(0))) }
+    var scanTargetIndex by rememberSaveable { mutableStateOf<Int?>(null) }
+    var scanNotFoundIndex by rememberSaveable { mutableStateOf<Int?>(null) }
 
     LaunchedEffect(presetContact) {
         presetContact?.let { contact ->
