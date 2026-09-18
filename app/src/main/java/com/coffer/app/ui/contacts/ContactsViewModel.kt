@@ -24,6 +24,7 @@ data class ContactRow(
 
 data class ContactsUiState(
     val filterType: String = ContactType.SUPPLIER.name,
+    val searchQuery: String = "",
     val rows: List<ContactRow> = emptyList()
 )
 
@@ -35,15 +36,17 @@ class ContactsViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val filterType = MutableStateFlow(ContactType.SUPPLIER.name)
+    private val searchQuery = MutableStateFlow("")
 
     val uiState: StateFlow<ContactsUiState> = combine(
         filterType,
+        searchQuery,
         contactRepository.getAllContacts(),
         orderRepository.getAllOrders(),
         paymentRepository.getAllPayments()
-    ) { type, contacts, orders, payments ->
+    ) { type, query, contacts, orders, payments ->
         val rows = contacts
-            .filter { it.type == type }
+            .filter { it.type == type && it.name.contains(query, ignoreCase = true) }
             .map { contact ->
                 ContactRow(
                     contact = contact,
@@ -51,10 +54,14 @@ class ContactsViewModel @Inject constructor(
                     totalRemainingCents = totalRemainingForContact(contact.id, orders, payments)
                 )
             }
-        ContactsUiState(filterType = type, rows = rows)
+        ContactsUiState(filterType = type, searchQuery = query, rows = rows)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ContactsUiState())
 
     fun setFilter(type: String) {
         filterType.value = type
+    }
+
+    fun setSearchQuery(query: String) {
+        searchQuery.value = query
     }
 }
