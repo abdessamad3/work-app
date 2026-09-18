@@ -1,5 +1,6 @@
 package com.coffer.app.ui.orderdetail
 
+import android.content.Intent
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -43,11 +44,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coffer.app.data.local.entity.ContactType
 import com.coffer.app.data.local.entity.LineItemEntity
+import com.coffer.app.data.local.entity.OrderEntity
 import com.coffer.app.data.local.entity.PaymentEntity
 import com.coffer.app.data.local.entity.ProductEntity
 import com.coffer.app.domain.OrderStatus
@@ -66,9 +69,11 @@ fun OrderDetailScreen(
     onBack: () -> Unit,
     viewModel: OrderDetailViewModel = hiltViewModel()
 ) {
+    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
     val products by viewModel.products.collectAsState()
     val order = uiState.order
+    val receiptText = order?.let { buildReceiptText(it, uiState.contact?.name ?: "Contact", uiState) } ?: ""
 
     var showMenu by remember { mutableStateOf(false) }
     var showDeleteOrderConfirm by remember { mutableStateOf(false) }
@@ -86,6 +91,19 @@ fun OrderDetailScreen(
                 actions = {
                     IconButton(onClick = { showMenu = true }) { Icon(Icons.Default.MoreVert, contentDescription = "More options") }
                     DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                        if (order != null) {
+                            DropdownMenuItem(
+                                text = { Text("Share receipt") },
+                                onClick = {
+                                    showMenu = false
+                                    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(Intent.EXTRA_TEXT, receiptText)
+                                    }
+                                    context.startActivity(Intent.createChooser(sendIntent, "Share receipt"))
+                                }
+                            )
+                        }
                         if (order != null && !order.itemized) {
                             DropdownMenuItem(text = { Text("Edit order") }, onClick = { showMenu = false; showEditOrderDialog = true })
                         }
@@ -278,6 +296,34 @@ fun OrderDetailScreen(
             )
         }
     }
+}
+
+@Composable
+private fun buildReceiptText(order: OrderEntity, contactName: String, uiState: OrderDetailUiState): String = buildString {
+    appendLine("Receipt — $contactName")
+    appendLine(formatDate(order.createdAt))
+    appendLine()
+    if (order.itemized) {
+        uiState.items.forEach { item ->
+            val discountSuffix = if (item.discountPercent > 0) " (-${item.discountPercent}%)" else ""
+            appendLine("${item.name} x${item.quantity} @ ${formatCents(item.listUnitPriceCents)}$discountSuffix — ${formatCents(item.lineTotalCents())}")
+        }
+    } else {
+        appendLine(order.description ?: "Order")
+    }
+    appendLine()
+    appendLine("Total: ${formatCents(order.totalAmountCents)}")
+    if (uiState.payments.isNotEmpty()) {
+        appendLine()
+        appendLine("Payments:")
+        uiState.payments.sortedBy { it.paidAt }.forEach { p ->
+            val note = p.note?.let { " ($it)" } ?: ""
+            appendLine("${formatDate(p.paidAt)} — ${formatCents(p.amountCents)}$note")
+        }
+    }
+    appendLine()
+    appendLine("Paid: ${formatCents(uiState.paidCents)}")
+    appendLine("Remaining: ${formatCents(uiState.remainingCents)}")
 }
 
 @Composable
