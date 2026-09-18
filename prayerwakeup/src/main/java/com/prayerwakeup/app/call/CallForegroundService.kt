@@ -3,8 +3,12 @@ package com.prayerwakeup.app.call
 import android.app.Notification
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.prayerwakeup.app.PrayerWakeupApp
 import com.prayerwakeup.app.conversation.CallEvent
 import com.prayerwakeup.app.conversation.ConversationManager
@@ -33,6 +37,26 @@ class CallForegroundService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var actionsJob: Job? = null
     private val cancelled = AtomicBoolean(false)
+    private var screenOffReceiverRegistered = false
+
+    // Android doesn't let apps see the physical power-button press itself, only its effect
+    // (the screen turning off), which the power button is the main real-world cause of during
+    // an active call. Requested explicitly: treat screen-off as "dismiss the call" the same as
+    // tapping decline, accepting that any screen-off (not just a deliberate power-button tap)
+    // will silence it.
+    private val screenOffReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == Intent.ACTION_SCREEN_OFF) handleDecline()
+        }
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        ContextCompat.registerReceiver(
+            this, screenOffReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF), ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+        screenOffReceiverRegistered = true
+    }
 
     override fun onBind(intent: Intent?) = null
 
@@ -176,6 +200,10 @@ class CallForegroundService : Service() {
         ringtonePlayer.stop()
         conversationManager.stop()
         getSystemService(android.app.NotificationManager::class.java)?.cancel(FULL_SCREEN_NOTIFICATION_ID)
+        if (screenOffReceiverRegistered) {
+            runCatching { unregisterReceiver(screenOffReceiver) }
+            screenOffReceiverRegistered = false
+        }
         super.onDestroy()
     }
 
