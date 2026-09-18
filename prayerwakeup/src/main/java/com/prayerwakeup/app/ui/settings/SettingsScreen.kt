@@ -399,9 +399,12 @@ private fun ManualLocationForm(
     initialTz: String,
     onSave: (Double, Double, String, String) -> Unit
 ) {
-    var lat by remember { mutableStateOf(initialLat.toString()) }
-    var lon by remember { mutableStateOf(initialLon.toString()) }
-    var tz by remember { mutableStateOf(initialTz) }
+    // Keyed on the initial values so the fields pick up a GPS/manual save made elsewhere
+    // (e.g. tapping "use my current location") instead of freezing at whatever was on
+    // screen the first time this form composed.
+    var lat by remember(initialLat) { mutableStateOf(initialLat.toString()) }
+    var lon by remember(initialLon) { mutableStateOf(initialLon.toString()) }
+    var tz by remember(initialTz) { mutableStateOf(initialTz) }
     var label by remember { mutableStateOf("") }
 
     Text("أو أدخل الموقع يدوياً:", style = MaterialTheme.typography.bodyMedium)
