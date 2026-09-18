@@ -60,6 +60,7 @@ class BackupRepository @Inject constructor(
                         .put("itemized", o.itemized)
                         .put("description", o.description ?: JSONObject.NULL)
                         .put("createdAt", o.createdAt)
+                        .put("dueDate", o.dueDate ?: JSONObject.NULL)
                 )
             }
         })
@@ -116,7 +117,8 @@ class BackupRepository @Inject constructor(
                 totalAmountCents = o.getLong("totalAmountCents"),
                 itemized = o.getBoolean("itemized"),
                 description = if (o.isNull("description")) null else o.getString("description"),
-                createdAt = o.getLong("createdAt")
+                createdAt = o.getLong("createdAt"),
+                dueDate = if (o.isNull("dueDate")) null else o.getLong("dueDate")
             )
         }
         val lineItems = root.getJSONArray("lineItems").mapObjects { o ->

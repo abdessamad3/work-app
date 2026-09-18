@@ -100,6 +100,7 @@ class NewOrderViewModel @Inject constructor(
         description: String,
         items: List<ItemEntry>,
         paymentNowText: String,
+        dueDate: Long?,
         onError: (String) -> Unit
     ) {
         viewModelScope.launch {
@@ -150,7 +151,7 @@ class NewOrderViewModel @Inject constructor(
 
             val paymentNowCents = paymentNowText.toDoubleOrNull()?.takeIf { it > 0 }?.let { Math.round(it * 100) }
 
-            orderRepository.createOrder(contactId, totalCents, itemized, desc, cleanedItems, paymentNowCents)
+            orderRepository.createOrder(contactId, totalCents, itemized, desc, cleanedItems, paymentNowCents, dueDate)
             _created.emit(contactId)
         }
     }

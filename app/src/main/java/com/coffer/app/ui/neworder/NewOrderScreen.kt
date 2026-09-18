@@ -18,6 +18,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -30,7 +32,9 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -47,6 +51,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.coffer.app.data.local.entity.ContactType
 import com.coffer.app.domain.effectiveUnitPriceCents
 import com.coffer.app.domain.formatCents
+import com.coffer.app.domain.formatDate
 import com.coffer.app.domain.normalizeBarcode
 import com.coffer.app.ui.components.BarcodeScannerDialog
 import com.coffer.app.ui.components.ProductThumbnail
@@ -137,6 +142,8 @@ fun NewOrderScreen(
     var items by rememberSaveable(stateSaver = ItemDraftListSaver) { mutableStateOf(listOf(ItemDraft(0))) }
     var scanTargetIndex by rememberSaveable { mutableStateOf<Int?>(null) }
     var scanNotFoundIndex by rememberSaveable { mutableStateOf<Int?>(null) }
+    var dueDateMillis by rememberSaveable { mutableStateOf<Long?>(null) }
+    var showDatePicker by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(presetContact) {
         presetContact?.let { contact ->
@@ -405,6 +412,23 @@ fun NewOrderScreen(
                 }
             }
 
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    dueDateMillis?.let { "Due ${formatDate(it)}" } ?: "No due date",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Row {
+                    TextButton(onClick = { showDatePicker = true }) { Text(if (dueDateMillis == null) "Set due date" else "Change") }
+                    if (dueDateMillis != null) {
+                        TextButton(onClick = { dueDateMillis = null }) { Text("Clear") }
+                    }
+                }
+            }
+
             OutlinedTextField(
                 value = paymentNowText,
                 onValueChange = { paymentNowText = it },
@@ -428,11 +452,30 @@ fun NewOrderScreen(
                             draft.productId?.let { pid -> ItemEntry(pid, draft.qty, draft.listPrice, draft.discountPercent) }
                         },
                         paymentNowText = paymentNowText,
+                        dueDate = dueDateMillis,
                         onError = { errorText = it }
                     )
                 },
                 modifier = Modifier.fillMaxWidth()
             ) { Text("Save order") }
+        }
+    }
+
+    if (showDatePicker) {
+        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = dueDateMillis)
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    dueDateMillis = datePickerState.selectedDateMillis
+                    showDatePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+            }
+        ) {
+            DatePicker(state = datePickerState)
         }
     }
 

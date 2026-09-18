@@ -45,10 +45,11 @@ class OrderRepository @Inject constructor(
         itemized: Boolean,
         description: String?,
         items: List<NewLineItem>,
-        initialPaymentCents: Long?
+        initialPaymentCents: Long?,
+        dueDate: Long? = null
     ): Int = database.withTransaction {
         val orderId = orderDao.insert(
-            OrderEntity(contactId = contactId, totalAmountCents = totalAmountCents, itemized = itemized, description = description)
+            OrderEntity(contactId = contactId, totalAmountCents = totalAmountCents, itemized = itemized, description = description, dueDate = dueDate)
         ).toInt()
 
         if (itemized && items.isNotEmpty()) {
@@ -77,6 +78,12 @@ class OrderRepository @Inject constructor(
     suspend fun updateFlatOrder(orderId: Int, totalAmountCents: Long, description: String?) {
         val order = orderDao.getOrderByIdOnce(orderId) ?: return
         orderDao.update(order.copy(totalAmountCents = totalAmountCents, description = description))
+    }
+
+    /** Works for both flat and itemized orders since a due date isn't tied to how the total is computed. */
+    suspend fun updateDueDate(orderId: Int, dueDate: Long?) {
+        val order = orderDao.getOrderByIdOnce(orderId) ?: return
+        orderDao.update(order.copy(dueDate = dueDate))
     }
 
     suspend fun addLineItem(orderId: Int, productId: Int, name: String, quantity: Int, listUnitPriceCents: Long, discountPercent: Int) =

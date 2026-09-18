@@ -12,5 +12,6 @@ data class OrderEntity(
     val totalAmountCents: Long,
     val itemized: Boolean,
     val description: String?,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val dueDate: Long? = null
 )

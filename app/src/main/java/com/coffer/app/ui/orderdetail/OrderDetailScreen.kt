@@ -22,6 +22,8 @@ import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -36,6 +38,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -82,6 +85,7 @@ fun OrderDetailScreen(
     var showAddPaymentDialog by remember { mutableStateOf(false) }
     var itemDialogTarget by remember { mutableStateOf<LineItemEntity?>(null) }
     var showAddItemDialog by remember { mutableStateOf(false) }
+    var showDueDatePicker by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -102,6 +106,12 @@ fun OrderDetailScreen(
                                     }
                                     context.startActivity(Intent.createChooser(sendIntent, "Share receipt"))
                                 }
+                            )
+                        }
+                        if (order != null) {
+                            DropdownMenuItem(
+                                text = { Text(if (order.dueDate == null) "Set due date" else "Change due date") },
+                                onClick = { showMenu = false; showDueDatePicker = true }
                             )
                         }
                         if (order != null && !order.itemized) {
@@ -128,6 +138,14 @@ fun OrderDetailScreen(
                                 Text(formatCents(order.totalAmountCents), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                                 Text(order.description ?: "Itemized order", style = MaterialTheme.typography.bodySmall)
                                 Text(formatDate(order.createdAt), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                order.dueDate?.let { dueDate ->
+                                    val isOverdue = dueDate < System.currentTimeMillis() && uiState.status != OrderStatus.PAID
+                                    Text(
+                                        "Due ${formatDate(dueDate)}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (isOverdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                             StatusChip(uiState.status)
                         }
@@ -294,6 +312,32 @@ fun OrderDetailScreen(
                 },
                 dismissButton = { TextButton(onClick = { showDeleteOrderConfirm = false }) { Text("Cancel") } }
             )
+        }
+
+        if (showDueDatePicker) {
+            val datePickerState = rememberDatePickerState(initialSelectedDateMillis = order.dueDate)
+            DatePickerDialog(
+                onDismissRequest = { showDueDatePicker = false },
+                confirmButton = {
+                    TextButton(onClick = {
+                        viewModel.setDueDate(datePickerState.selectedDateMillis)
+                        showDueDatePicker = false
+                    }) { Text("OK") }
+                },
+                dismissButton = {
+                    Row {
+                        if (order.dueDate != null) {
+                            TextButton(onClick = {
+                                viewModel.setDueDate(null)
+                                showDueDatePicker = false
+                            }) { Text("Clear") }
+                        }
+                        TextButton(onClick = { showDueDatePicker = false }) { Text("Cancel") }
+                    }
+                }
+            ) {
+                DatePicker(state = datePickerState)
+            }
         }
     }
 }

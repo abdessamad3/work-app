@@ -123,6 +123,12 @@ class OrderDetailViewModel @Inject constructor(
         }
     }
 
+    fun setDueDate(dueDate: Long?) {
+        viewModelScope.launch {
+            orderRepository.updateDueDate(orderId, dueDate)
+        }
+    }
+
     fun addLineItem(productId: Int, quantity: Int, listUnitPriceCents: Long, discountPercent: Int) {
         val name = products.value.find { it.id == productId }?.name ?: return
         viewModelScope.launch {
