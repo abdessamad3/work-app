@@ -41,6 +41,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.prayerwakeup.app.data.remote.MawaqitTimes
 import com.prayerwakeup.app.domain.CalculationMethod
 import com.prayerwakeup.app.domain.CallerPersona
 import com.prayerwakeup.app.domain.Madhab
@@ -117,6 +118,13 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
             }
             if (state.settings.prayerTimeSource == PrayerTimeSource.MOROCCO_HABOUS) {
                 MoroccoCitySection(viewModel = viewModel, selectedCityLabel = state.settings.moroccoCityLabel)
+            }
+            if (state.settings.prayerTimeSource == PrayerTimeSource.MAWAQIT_MOSQUE) {
+                MawaqitMosqueSection(
+                    viewModel = viewModel,
+                    selectedMosqueId = state.settings.mawaqitMosqueId,
+                    selectedMosqueLabel = state.settings.mawaqitMosqueLabel
+                )
             }
 
             Divider(Modifier.padding(vertical = 20.dp))
@@ -340,6 +348,72 @@ private fun MoroccoCitySection(viewModel: SettingsViewModel, selectedCityLabel: 
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun MawaqitMosqueSection(viewModel: SettingsViewModel, selectedMosqueId: String, selectedMosqueLabel: String) {
+    val lookupState by viewModel.mawaqitLookup.collectAsState()
+    var mosqueIdField by remember(selectedMosqueId) { mutableStateOf(selectedMosqueId) }
+
+    Column(Modifier.padding(top = 8.dp, start = 40.dp)) {
+        Text(
+            if (selectedMosqueLabel.isNotBlank()) "المسجد المختار: $selectedMosqueLabel (رقم $selectedMosqueId)"
+            else "لم يُختر مسجد بعد",
+            style = MaterialTheme.typography.bodyMedium
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "أدخل رقم المسجد من موقع mawaqit.net (يظهر في رابط صفحة المسجد)، ثم تحقق منه لعرض اسمه ومواقيته قبل الاختيار.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline
+        )
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(
+            value = mosqueIdField,
+            onValueChange = { mosqueIdField = it },
+            label = { Text("رقم المسجد (مثال: 49015)") },
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(Modifier.height(8.dp))
+        Button(onClick = {
+            viewModel.resetMawaqitLookup()
+            viewModel.lookupMawaqitMosque(mosqueIdField)
+        }) { Text("التحقق من المسجد") }
+
+        Spacer(Modifier.height(8.dp))
+        when (val s = lookupState) {
+            is MawaqitLookupUiState.Idle -> Unit
+            is MawaqitLookupUiState.Loading -> {
+                Text("جارٍ البحث عن المسجد...", color = MaterialTheme.colorScheme.outline)
+            }
+            is MawaqitLookupUiState.Error -> {
+                Text(
+                    "تعذر العثور على المسجد: ${s.message}. سيُستخدم الحساب الفلكي بدلاً منه تلقائياً حتى تعاود المحاولة.",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            is MawaqitLookupUiState.Loaded -> {
+                MawaqitPreview(times = s.times)
+                Spacer(Modifier.height(8.dp))
+                Button(onClick = { viewModel.confirmMawaqitMosque(mosqueIdField, s.times) }) {
+                    Text("اعتماد هذا المسجد")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MawaqitPreview(times: MawaqitTimes) {
+    Column {
+        Text("تم العثور على: ${times.mosqueName}", style = MaterialTheme.typography.bodyMedium)
+        Text(
+            "الفجر ${times.fajr} · الظهر ${times.dhuhr} · العصر ${times.asr} · المغرب ${times.maghrib} · العشاء ${times.isha}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline
+        )
     }
 }
 

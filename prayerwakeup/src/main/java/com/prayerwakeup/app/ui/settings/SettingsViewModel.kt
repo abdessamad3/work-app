@@ -6,6 +6,8 @@ import com.prayerwakeup.app.alarm.AlarmScheduler
 import com.prayerwakeup.app.conversation.ElevenLabsClient
 import com.prayerwakeup.app.conversation.ElevenLabsVoice
 import com.prayerwakeup.app.data.location.LocationProvider
+import com.prayerwakeup.app.data.remote.MawaqitClient
+import com.prayerwakeup.app.data.remote.MawaqitTimes
 import com.prayerwakeup.app.data.remote.MoroccoCity
 import com.prayerwakeup.app.data.remote.MoroccoHabousClient
 import com.prayerwakeup.app.data.settings.PrayerSettings
@@ -47,6 +49,13 @@ sealed interface ElevenLabsVoicesUiState {
     data class Error(val message: String) : ElevenLabsVoicesUiState
 }
 
+sealed interface MawaqitLookupUiState {
+    data object Idle : MawaqitLookupUiState
+    data object Loading : MawaqitLookupUiState
+    data class Loaded(val times: MawaqitTimes) : MawaqitLookupUiState
+    data class Error(val message: String) : MawaqitLookupUiState
+}
+
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
@@ -54,7 +63,8 @@ class SettingsViewModel @Inject constructor(
     private val locationProvider: LocationProvider,
     private val alarmScheduler: AlarmScheduler,
     private val moroccoHabousClient: MoroccoHabousClient,
-    private val elevenLabsClient: ElevenLabsClient
+    private val elevenLabsClient: ElevenLabsClient,
+    private val mawaqitClient: MawaqitClient
 ) : ViewModel() {
 
     private val _moroccoCities = MutableStateFlow<MoroccoCitiesUiState>(MoroccoCitiesUiState.Idle)
@@ -62,6 +72,9 @@ class SettingsViewModel @Inject constructor(
 
     private val _elevenLabsVoices = MutableStateFlow<ElevenLabsVoicesUiState>(ElevenLabsVoicesUiState.Idle)
     val elevenLabsVoices: StateFlow<ElevenLabsVoicesUiState> = _elevenLabsVoices.asStateFlow()
+
+    private val _mawaqitLookup = MutableStateFlow<MawaqitLookupUiState>(MawaqitLookupUiState.Idle)
+    val mawaqitLookup: StateFlow<MawaqitLookupUiState> = _mawaqitLookup.asStateFlow()
 
     val uiState: StateFlow<SettingsUiState> = combine(
         settingsRepository.settingsFlow,
@@ -186,5 +199,30 @@ class SettingsViewModel @Inject constructor(
 
     fun clearElevenLabsVoice() {
         viewModelScope.launch { settingsRepository.updateElevenLabsVoice("", "") }
+    }
+
+    // Unlike Morocco Habous (a picked-from-a-list city), a mosque ID is free-typed, so it's
+    // verified by fetching it once before being saved — this both confirms the ID is real and
+    // shows the user which mosque they're about to select, since the ID alone means nothing to them.
+    fun lookupMawaqitMosque(mosqueId: String) {
+        val id = mosqueId.trim()
+        if (id.isBlank()) return
+        _mawaqitLookup.value = MawaqitLookupUiState.Loading
+        viewModelScope.launch {
+            mawaqitClient.fetchTodayTimes(id)
+                .onSuccess { _mawaqitLookup.value = MawaqitLookupUiState.Loaded(it) }
+                .onFailure { _mawaqitLookup.value = MawaqitLookupUiState.Error(it.message ?: "تعذر العثور على المسجد") }
+        }
+    }
+
+    fun confirmMawaqitMosque(mosqueId: String, times: MawaqitTimes) {
+        viewModelScope.launch {
+            settingsRepository.updateMawaqitMosque(mosqueId.trim(), times.mosqueName)
+            alarmScheduler.rescheduleAll()
+        }
+    }
+
+    fun resetMawaqitLookup() {
+        _mawaqitLookup.value = MawaqitLookupUiState.Idle
     }
 }

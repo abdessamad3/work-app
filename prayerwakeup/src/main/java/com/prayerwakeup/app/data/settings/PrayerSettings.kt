@@ -23,5 +23,7 @@ data class PrayerSettings(
     val moroccoCityId: Int? = null,
     val moroccoCityLabel: String = "",
     val elevenLabsVoiceId: String = "",
-    val elevenLabsVoiceLabel: String = ""
+    val elevenLabsVoiceLabel: String = "",
+    val mawaqitMosqueId: String = "",
+    val mawaqitMosqueLabel: String = ""
 )
