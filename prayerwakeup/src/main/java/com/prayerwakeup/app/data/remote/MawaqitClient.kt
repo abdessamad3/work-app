@@ -35,27 +35,41 @@ class MawaqitClient @Inject constructor() {
         .readTimeout(15, TimeUnit.SECONDS)
         .build()
 
-    suspend fun fetchTodayTimes(mosqueId: String): Result<MawaqitTimes> = withContext(Dispatchers.IO) {
+    suspend fun fetchTodayTimes(mosqueIdentifier: String): Result<MawaqitTimes> = withContext(Dispatchers.IO) {
         runCatching {
-            val id = mosqueId.trim()
-            if (id.isBlank()) throw IllegalStateException("لم يُحدد رقم المسجد")
+            val slug = normalizeSlug(mosqueIdentifier)
+            if (slug.isBlank()) throw IllegalStateException("لم يُحدد رابط أو اسم المسجد")
 
             val request = Request.Builder()
-                .url("https://mawaqit.net/en/$id")
+                .url("https://mawaqit.net/en/$slug")
                 .header("User-Agent", "Mozilla/5.0 (Android) PrayerWakeupApp")
                 .get()
                 .build()
 
             val html = client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
+                if (!response.isSuccessful) {
+                    throw IOException("HTTP ${response.code} — تأكد من نسخ الرابط كاملاً من صفحة المسجد الحقيقية على mawaqit.net")
+                }
                 response.body?.string()?.takeIf { it.isNotBlank() } ?: throw IOException("صفحة المسجد فارغة")
             }
 
             val confData = extractConfData(html)
-                ?: throw IOException("تعذر العثور على بيانات المسجد في الصفحة (قد يكون رقم المسجد خاطئاً)")
+                ?: throw IOException("تعذر العثور على بيانات المسجد في الصفحة (قد يكون الرابط أو الاسم خاطئاً)")
 
             parseConfData(confData)
         }
+    }
+
+    /** mawaqit.net identifies mosques in its public URLs by a text slug (e.g.
+     * "mawaqit.net/en/some-mosque-name"), not by the numeric "mosque code" some mosques show
+     * on their in-building display — that code isn't a public identifier. So this accepts
+     * either a bare slug or a full URL the user copy-pasted from their browser's address bar
+     * after finding their mosque on mawaqit.net, and always extracts just the slug: the last
+     * non-empty path segment, which is also correct for a bare slug typed directly. */
+    private fun normalizeSlug(raw: String): String {
+        val trimmed = raw.trim().trimEnd('/')
+        val afterDomain = trimmed.substringAfter("mawaqit.net/", trimmed)
+        return afterDomain.substringAfterLast('/').trim()
     }
 
     /** confData is a JS object literal embedded in a <script> tag, not a standalone JSON

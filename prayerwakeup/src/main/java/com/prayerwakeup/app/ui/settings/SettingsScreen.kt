@@ -358,13 +358,13 @@ private fun MawaqitMosqueSection(viewModel: SettingsViewModel, selectedMosqueId:
 
     Column(Modifier.padding(top = 8.dp, start = 40.dp)) {
         Text(
-            if (selectedMosqueLabel.isNotBlank()) "المسجد المختار: $selectedMosqueLabel (رقم $selectedMosqueId)"
+            if (selectedMosqueLabel.isNotBlank()) "المسجد المختار: $selectedMosqueLabel"
             else "لم يُختر مسجد بعد",
             style = MaterialTheme.typography.bodyMedium
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            "أدخل رقم المسجد من موقع mawaqit.net (يظهر في رابط صفحة المسجد)، ثم تحقق منه لعرض اسمه ومواقيته قبل الاختيار.",
+            "افتح mawaqit.net في المتصفح وابحث عن اسم مسجدك أو مدينتك، ثم افتح صفحة المسجد وانسخ رابطها هنا (وليس أي رقم يظهر على شاشة المسجد، فهو غير مرتبط برابط الصفحة). يمكنك أيضاً كتابة الجزء الأخير من الرابط فقط.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.outline
         )
@@ -372,7 +372,7 @@ private fun MawaqitMosqueSection(viewModel: SettingsViewModel, selectedMosqueId:
         OutlinedTextField(
             value = mosqueIdField,
             onValueChange = { mosqueIdField = it },
-            label = { Text("رقم المسجد (مثال: 49015)") },
+            label = { Text("رابط صفحة المسجد على mawaqit.net") },
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(8.dp))
