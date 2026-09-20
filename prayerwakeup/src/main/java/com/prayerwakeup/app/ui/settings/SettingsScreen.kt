@@ -4,6 +4,8 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,9 +18,16 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -36,7 +45,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -73,211 +84,249 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
                 .padding(16.dp)
                 .verticalScroll(rememberScrollState())
         ) {
-            SectionTitle("الموقع")
-            Text(
-                if (state.settings.hasLocation) {
-                    "${state.settings.locationLabel} (${"%.4f".format(state.settings.latitude)}, ${"%.4f".format(state.settings.longitude)})"
-                } else {
-                    "لم يُحدد بعد"
+            ExpandableSection(title = "الموقع", icon = Icons.Filled.LocationOn, initiallyExpanded = true) {
+                Text(
+                    if (state.settings.hasLocation) {
+                        "${state.settings.locationLabel} (${"%.4f".format(state.settings.latitude)}, ${"%.4f".format(state.settings.longitude)})"
+                    } else {
+                        "لم يُحدد بعد"
+                    }
+                )
+                Spacer(Modifier.height(8.dp))
+                var locating by remember { mutableStateOf(false) }
+                var locationError by remember { mutableStateOf<String?>(null) }
+                Button(onClick = {
+                    locating = true
+                    locationError = null
+                    viewModel.detectLocation { success ->
+                        locating = false
+                        if (!success) locationError = "تعذر تحديد الموقع، تأكد من تفعيل GPS أو أدخله يدوياً بالأسفل"
+                    }
+                }) {
+                    Text(if (locating) "جارٍ تحديد الموقع..." else "استخدام موقعي الحالي (GPS)")
                 }
-            )
-            Spacer(Modifier.height(8.dp))
-            var locating by remember { mutableStateOf(false) }
-            var locationError by remember { mutableStateOf<String?>(null) }
-            Button(onClick = {
-                locating = true
-                locationError = null
-                viewModel.detectLocation { success ->
-                    locating = false
-                    if (!success) locationError = "تعذر تحديد الموقع، تأكد من تفعيل GPS أو أدخله يدوياً بالأسفل"
+                locationError?.let {
+                    Spacer(Modifier.height(4.dp))
+                    Text(it, color = MaterialTheme.colorScheme.error)
                 }
-            }) {
-                Text(if (locating) "جارٍ تحديد الموقع..." else "استخدام موقعي الحالي (GPS)")
-            }
-            locationError?.let {
-                Spacer(Modifier.height(4.dp))
-                Text(it, color = MaterialTheme.colorScheme.error)
-            }
 
-            Spacer(Modifier.height(12.dp))
-            LocationSearchSection(viewModel = viewModel)
+                Spacer(Modifier.height(16.dp))
+                LocationSearchSection(viewModel = viewModel)
 
-            Spacer(Modifier.height(12.dp))
-            ManualLocationForm(
-                initialLat = state.settings.latitude,
-                initialLon = state.settings.longitude,
-                initialTz = state.settings.timeZoneId,
-                onSave = { lat, lon, tz, label -> viewModel.setManualLocation(lat, lon, tz, label) }
-            )
-
-            Divider(Modifier.padding(vertical = 20.dp))
-
-            SectionTitle("مصدر مواقيت الصلاة")
-            PrayerTimeSource.entries.forEach { source ->
-                RadioRow(
-                    label = source.displayName,
-                    selected = state.settings.prayerTimeSource == source,
-                    onClick = { viewModel.setPrayerTimeSource(source) }
-                )
-            }
-            if (state.settings.prayerTimeSource == PrayerTimeSource.MOROCCO_HABOUS) {
-                MoroccoCitySection(viewModel = viewModel, selectedCityLabel = state.settings.moroccoCityLabel)
-            }
-            if (state.settings.prayerTimeSource == PrayerTimeSource.MAWAQIT_MOSQUE) {
-                MawaqitMosqueSection(
-                    viewModel = viewModel,
-                    selectedMosqueId = state.settings.mawaqitMosqueId,
-                    selectedMosqueLabel = state.settings.mawaqitMosqueLabel
-                )
-            }
-            if (state.settings.prayerTimeSource == PrayerTimeSource.ALADHAN) {
-                AlAdhanPreviewSection(viewModel = viewModel, locationLabel = state.settings.locationLabel)
-            }
-
-            Divider(Modifier.padding(vertical = 20.dp))
-
-            SectionTitle("طريقة حساب المواقيت (احتياطية دائماً، ومستخدمة كاملة إن اخترت \"حساب فلكي\")")
-            CalculationMethod.entries.forEach { method ->
-                RadioRow(
-                    label = method.displayName,
-                    selected = state.settings.calculationMethod == method,
-                    onClick = { viewModel.setCalculationMethod(method) }
+                Spacer(Modifier.height(16.dp))
+                ManualLocationForm(
+                    initialLat = state.settings.latitude,
+                    initialLon = state.settings.longitude,
+                    initialTz = state.settings.timeZoneId,
+                    onSave = { lat, lon, tz, label -> viewModel.setManualLocation(lat, lon, tz, label) }
                 )
             }
 
-            Divider(Modifier.padding(vertical = 20.dp))
-
-            SectionTitle("المذهب (لحساب وقت العصر)")
-            Madhab.entries.forEach { madhab ->
-                RadioRow(
-                    label = madhab.displayName,
-                    selected = state.settings.madhab == madhab,
-                    onClick = { viewModel.setMadhab(madhab) }
-                )
-            }
-
-            Divider(Modifier.padding(vertical = 20.dp))
-
-            SectionTitle("الصلوات المفعّلة للاتصال")
-            Prayer.entries.forEach { prayer ->
-                Row {
-                    Checkbox(
-                        checked = state.settings.enabledPrayers.contains(prayer),
-                        onCheckedChange = { viewModel.togglePrayer(prayer, state.settings.enabledPrayers) }
-                    )
-                    Text(prayer.arabicName, modifier = Modifier.padding(top = 12.dp))
-                }
-            }
-
-            Divider(Modifier.padding(vertical = 20.dp))
-
-            SectionTitle("أسلوب المتصل")
-            CallerPersona.entries.forEach { persona ->
-                Column {
+            ExpandableSection(title = "مواقيت الصلاة وطريقة الحساب", icon = Icons.Filled.Schedule) {
+                SubsectionTitle("مصدر مواقيت الصلاة")
+                PrayerTimeSource.entries.forEach { source ->
                     RadioRow(
-                        label = persona.displayName,
-                        selected = state.settings.persona == persona,
-                        onClick = { viewModel.setPersona(persona) }
+                        label = source.displayName,
+                        selected = state.settings.prayerTimeSource == source,
+                        onClick = { viewModel.setPrayerTimeSource(source) }
                     )
-                    Text(
-                        persona.styleDescription,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.outline,
-                        modifier = Modifier.padding(start = 40.dp, bottom = 4.dp)
+                }
+                if (state.settings.prayerTimeSource == PrayerTimeSource.MOROCCO_HABOUS) {
+                    MoroccoCitySection(viewModel = viewModel, selectedCityLabel = state.settings.moroccoCityLabel)
+                }
+                if (state.settings.prayerTimeSource == PrayerTimeSource.MAWAQIT_MOSQUE) {
+                    MawaqitMosqueSection(
+                        viewModel = viewModel,
+                        selectedMosqueId = state.settings.mawaqitMosqueId,
+                        selectedMosqueLabel = state.settings.mawaqitMosqueLabel
+                    )
+                }
+                if (state.settings.prayerTimeSource == PrayerTimeSource.ALADHAN) {
+                    AlAdhanPreviewSection(viewModel = viewModel, locationLabel = state.settings.locationLabel)
+                }
+
+                Spacer(Modifier.height(16.dp))
+                SubsectionTitle("طريقة حساب المواقيت (احتياطية دائماً، ومستخدمة كاملة إن اخترت \"حساب فلكي\")")
+                CalculationMethod.entries.forEach { method ->
+                    RadioRow(
+                        label = method.displayName,
+                        selected = state.settings.calculationMethod == method,
+                        onClick = { viewModel.setCalculationMethod(method) }
+                    )
+                }
+
+                Spacer(Modifier.height(16.dp))
+                SubsectionTitle("المذهب (لحساب وقت العصر)")
+                Madhab.entries.forEach { madhab ->
+                    RadioRow(
+                        label = madhab.displayName,
+                        selected = state.settings.madhab == madhab,
+                        onClick = { viewModel.setMadhab(madhab) }
                     )
                 }
             }
 
-            Divider(Modifier.padding(vertical = 20.dp))
+            ExpandableSection(title = "الصلوات والمكالمة", icon = Icons.Filled.Call) {
+                SubsectionTitle("الصلوات المفعّلة للاتصال")
+                Prayer.entries.forEach { prayer ->
+                    Row {
+                        Checkbox(
+                            checked = state.settings.enabledPrayers.contains(prayer),
+                            onCheckedChange = { viewModel.togglePrayer(prayer, state.settings.enabledPrayers) }
+                        )
+                        Text(prayer.arabicName, modifier = Modifier.padding(top = 12.dp))
+                    }
+                }
 
-            SectionTitle("مدة المكالمة القصوى (دقائق)")
-            Stepper(
-                value = state.settings.maxCallMinutes,
-                range = 1..10,
-                onChange = { viewModel.setMaxCallMinutes(it) }
-            )
-
-            Divider(Modifier.padding(vertical = 20.dp))
-
-            SectionTitle("محادثة ذكية حقيقية (اختياري)")
-            Text("أضف مفتاح Gemini API الخاص بك (مجاني من aistudio.google.com) ليتحدث معك المتصل بشكل حقيقي ويرد على ما تقوله. بدون المفتاح، سيستخدم التطبيق جملاً ثابتة فقط.")
-            Spacer(Modifier.height(8.dp))
-            var geminiKeyField by remember(state.geminiApiKey) { mutableStateOf(state.geminiApiKey) }
-            OutlinedTextField(
-                value = geminiKeyField,
-                onValueChange = { geminiKeyField = it },
-                label = { Text("Gemini API Key") },
-                visualTransformation = PasswordVisualTransformation(),
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(8.dp))
-            Button(onClick = { viewModel.saveGeminiApiKey(geminiKeyField) }) { Text("حفظ المفتاح") }
-
-            Divider(Modifier.padding(vertical = 20.dp))
-
-            SectionTitle("صوت طبيعي مخصص (ElevenLabs، اختياري)")
-            Text("أضف مفتاح ElevenLabs API (مجاني من elevenlabs.io) واختر صوتاً من مكتبتك ليتحدث به المتصل بدلاً من صوت النظام الافتراضي. الخطة المجانية تتيح أصواتاً جاهزة عالية الجودة، وليس استنساخ صوتك الخاص (يتطلب خطة مدفوعة).")
-            Spacer(Modifier.height(8.dp))
-            var elevenLabsKeyField by remember(state.elevenLabsApiKey) { mutableStateOf(state.elevenLabsApiKey) }
-            OutlinedTextField(
-                value = elevenLabsKeyField,
-                onValueChange = { elevenLabsKeyField = it },
-                label = { Text("ElevenLabs API Key") },
-                visualTransformation = PasswordVisualTransformation(),
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(8.dp))
-            Button(onClick = { viewModel.saveElevenLabsApiKey(elevenLabsKeyField) }) { Text("حفظ المفتاح") }
-            Spacer(Modifier.height(12.dp))
-            ElevenLabsVoiceSection(
-                viewModel = viewModel,
-                selectedVoiceLabel = state.settings.elevenLabsVoiceLabel
-            )
-
-            Divider(Modifier.padding(vertical = 20.dp))
-
-            SectionTitle("الأذونات")
-            if (!state.canScheduleExactAlarms) {
-                PermissionRow(
-                    text = "إذن التنبيهات الدقيقة مطلوب حتى تتصل بك المكالمة في الوقت المحدد بالضبط.",
-                    buttonLabel = "فتح الإعدادات"
-                ) {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        context.startActivity(
-                            Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${context.packageName}"))
+                Spacer(Modifier.height(16.dp))
+                SubsectionTitle("أسلوب المتصل")
+                CallerPersona.entries.forEach { persona ->
+                    Column {
+                        RadioRow(
+                            label = persona.displayName,
+                            selected = state.settings.persona == persona,
+                            onClick = { viewModel.setPersona(persona) }
+                        )
+                        Text(
+                            persona.styleDescription,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline,
+                            modifier = Modifier.padding(start = 40.dp, bottom = 4.dp)
                         )
                     }
                 }
-            }
-            PermissionRow(
-                text = "استثناء التطبيق من تحسين البطارية يمنع النظام من إيقافه قبل موعد الصلاة.",
-                buttonLabel = "فتح الإعدادات"
-            ) {
-                runCatching {
-                    context.startActivity(
-                        Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${context.packageName}"))
-                    )
-                }.onFailure {
-                    context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-                }
-            }
-            PermissionRow(
-                text = "تأكد من تفعيل الإشعارات ذات الأولوية العالية للتطبيق.",
-                buttonLabel = "إعدادات الإشعارات"
-            ) {
-                val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-                    .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                context.startActivity(intent)
+
+                Spacer(Modifier.height(16.dp))
+                SubsectionTitle("مدة المكالمة القصوى (دقائق)")
+                Stepper(
+                    value = state.settings.maxCallMinutes,
+                    range = 1..10,
+                    onChange = { viewModel.setMaxCallMinutes(it) }
+                )
             }
 
-            Spacer(Modifier.height(32.dp))
+            ExpandableSection(title = "الذكاء الاصطناعي والصوت", icon = Icons.Filled.RecordVoiceOver) {
+                SubsectionTitle("محادثة ذكية حقيقية (اختياري)")
+                Text("أضف مفتاح Gemini API الخاص بك (مجاني من aistudio.google.com) ليتحدث معك المتصل بشكل حقيقي ويرد على ما تقوله. بدون المفتاح، سيستخدم التطبيق جملاً ثابتة فقط.")
+                Spacer(Modifier.height(8.dp))
+                var geminiKeyField by remember(state.geminiApiKey) { mutableStateOf(state.geminiApiKey) }
+                OutlinedTextField(
+                    value = geminiKeyField,
+                    onValueChange = { geminiKeyField = it },
+                    label = { Text("Gemini API Key") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+                Button(onClick = { viewModel.saveGeminiApiKey(geminiKeyField) }) { Text("حفظ المفتاح") }
+
+                Spacer(Modifier.height(16.dp))
+                SubsectionTitle("صوت طبيعي مخصص (ElevenLabs، اختياري)")
+                Text("أضف مفتاح ElevenLabs API (مجاني من elevenlabs.io) واختر صوتاً من مكتبتك ليتحدث به المتصل بدلاً من صوت النظام الافتراضي. الخطة المجانية تتيح أصواتاً جاهزة عالية الجودة، وليس استنساخ صوتك الخاص (يتطلب خطة مدفوعة).")
+                Spacer(Modifier.height(8.dp))
+                var elevenLabsKeyField by remember(state.elevenLabsApiKey) { mutableStateOf(state.elevenLabsApiKey) }
+                OutlinedTextField(
+                    value = elevenLabsKeyField,
+                    onValueChange = { elevenLabsKeyField = it },
+                    label = { Text("ElevenLabs API Key") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+                Button(onClick = { viewModel.saveElevenLabsApiKey(elevenLabsKeyField) }) { Text("حفظ المفتاح") }
+                Spacer(Modifier.height(12.dp))
+                ElevenLabsVoiceSection(
+                    viewModel = viewModel,
+                    selectedVoiceLabel = state.settings.elevenLabsVoiceLabel
+                )
+            }
+
+            ExpandableSection(
+                title = "الأذونات",
+                icon = Icons.Filled.Security,
+                initiallyExpanded = !state.canScheduleExactAlarms
+            ) {
+                if (!state.canScheduleExactAlarms) {
+                    PermissionRow(
+                        text = "إذن التنبيهات الدقيقة مطلوب حتى تتصل بك المكالمة في الوقت المحدد بالضبط.",
+                        buttonLabel = "فتح الإعدادات"
+                    ) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            context.startActivity(
+                                Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${context.packageName}"))
+                            )
+                        }
+                    }
+                }
+                PermissionRow(
+                    text = "استثناء التطبيق من تحسين البطارية يمنع النظام من إيقافه قبل موعد الصلاة.",
+                    buttonLabel = "فتح الإعدادات"
+                ) {
+                    runCatching {
+                        context.startActivity(
+                            Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${context.packageName}"))
+                        )
+                    }.onFailure {
+                        context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+                    }
+                }
+                PermissionRow(
+                    text = "تأكد من تفعيل الإشعارات ذات الأولوية العالية للتطبيق.",
+                    buttonLabel = "إعدادات الإشعارات"
+                ) {
+                    val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                        .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                    context.startActivity(intent)
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
         }
     }
 }
 
+// A single collapsible card per topic, so the settings list reads as a short menu of
+// categories instead of one long undifferentiated scroll. Location starts open (the thing
+// almost every visit needs), and Permissions auto-opens only while something is actually
+// missing — otherwise every section starts collapsed and the user opens what they need.
 @Composable
-private fun SectionTitle(text: String) {
-    Text(text, style = MaterialTheme.typography.titleMedium)
+private fun ExpandableSection(
+    title: String,
+    icon: ImageVector,
+    initiallyExpanded: Boolean = false,
+    content: @Composable () -> Unit
+) {
+    var expanded by remember { mutableStateOf(initiallyExpanded) }
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded }
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.width(12.dp))
+                Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                Icon(
+                    if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                    contentDescription = if (expanded) "طي" else "توسيع"
+                )
+            }
+            AnimatedVisibility(visible = expanded) {
+                Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
+                    content()
+                }
+            }
+        }
+    }
+    Spacer(Modifier.height(12.dp))
+}
+
+@Composable
+private fun SubsectionTitle(text: String) {
+    Text(text, style = MaterialTheme.typography.titleSmall)
     Spacer(Modifier.height(8.dp))
 }
 
@@ -300,7 +349,7 @@ private fun PermissionRow(text: String, buttonLabel: String, onClick: () -> Unit
 
 @Composable
 private fun Stepper(value: Int, range: IntRange, onChange: (Int) -> Unit) {
-    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
         OutlinedButton(onClick = { if (value - 1 >= range.first) onChange(value - 1) }) { Text("-") }
         Text("$value", modifier = Modifier.padding(horizontal = 16.dp))
         OutlinedButton(onClick = { if (value + 1 <= range.last) onChange(value + 1) }) { Text("+") }
@@ -314,7 +363,7 @@ private fun LocationSearchSection(viewModel: SettingsViewModel) {
 
     Text("أو ابحث عن مدينتك بالاسم:", style = MaterialTheme.typography.bodyMedium)
     Spacer(Modifier.height(8.dp))
-    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
