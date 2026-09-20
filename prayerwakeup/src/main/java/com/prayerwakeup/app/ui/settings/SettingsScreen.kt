@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -99,6 +100,9 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
             }
 
             Spacer(Modifier.height(12.dp))
+            LocationSearchSection(viewModel = viewModel)
+
+            Spacer(Modifier.height(12.dp))
             ManualLocationForm(
                 initialLat = state.settings.latitude,
                 initialLon = state.settings.longitude,
@@ -127,7 +131,7 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
                 )
             }
             if (state.settings.prayerTimeSource == PrayerTimeSource.ALADHAN) {
-                AlAdhanPreviewSection(viewModel = viewModel)
+                AlAdhanPreviewSection(viewModel = viewModel, locationLabel = state.settings.locationLabel)
             }
 
             Divider(Modifier.padding(vertical = 20.dp))
@@ -304,6 +308,46 @@ private fun Stepper(value: Int, range: IntRange, onChange: (Int) -> Unit) {
 }
 
 @Composable
+private fun LocationSearchSection(viewModel: SettingsViewModel) {
+    val searchState by viewModel.locationSearch.collectAsState()
+    var query by remember { mutableStateOf("") }
+
+    Text("أو ابحث عن مدينتك بالاسم:", style = MaterialTheme.typography.bodyMedium)
+    Spacer(Modifier.height(8.dp))
+    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            label = { Text("اسم المدينة") },
+            modifier = Modifier.weight(1f)
+        )
+        Spacer(Modifier.width(8.dp))
+        Button(onClick = { viewModel.searchLocation(query) }) { Text("بحث") }
+    }
+    Spacer(Modifier.height(8.dp))
+    when (val s = searchState) {
+        is LocationSearchUiState.Idle -> Unit
+        is LocationSearchUiState.Loading -> {
+            Text("جارٍ البحث...", color = MaterialTheme.colorScheme.outline)
+        }
+        is LocationSearchUiState.Error -> {
+            Text(s.message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+        }
+        is LocationSearchUiState.Loaded -> {
+            Column {
+                s.places.forEach { place ->
+                    Row {
+                        TextButton(onClick = { viewModel.selectSearchedPlace(place) }) {
+                            Text(place.label)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun MoroccoCitySection(viewModel: SettingsViewModel, selectedCityLabel: String) {
     val citiesState by viewModel.moroccoCities.collectAsState()
 
@@ -421,7 +465,7 @@ private fun MawaqitPreview(times: MawaqitTimes) {
 }
 
 @Composable
-private fun AlAdhanPreviewSection(viewModel: SettingsViewModel) {
+private fun AlAdhanPreviewSection(viewModel: SettingsViewModel, locationLabel: String) {
     val previewState by viewModel.alAdhanPreview.collectAsState()
     val formatter = remember { java.time.format.DateTimeFormatter.ofPattern("HH:mm") }
 
@@ -430,6 +474,12 @@ private fun AlAdhanPreviewSection(viewModel: SettingsViewModel) {
     }
 
     Column(Modifier.padding(top = 8.dp, start = 40.dp)) {
+        Text(
+            if (locationLabel.isNotBlank()) "الموقع المستخدم: $locationLabel (من قسم \"الموقع\" أعلاه)"
+            else "لم يُحدد الموقع بعد — حدده في قسم \"الموقع\" أعلاه أولاً",
+            style = MaterialTheme.typography.bodyMedium
+        )
+        Spacer(Modifier.height(4.dp))
         Text(
             "تُستخدم طريقة الحساب والمذهب المختارين أدناه لجلب المواقيت الرسمية من هذه الخدمة عند توفر الإنترنت.",
             style = MaterialTheme.typography.bodySmall,

@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.prayerwakeup.app.alarm.AlarmScheduler
 import com.prayerwakeup.app.conversation.ElevenLabsClient
 import com.prayerwakeup.app.conversation.ElevenLabsVoice
+import com.prayerwakeup.app.data.location.GeoPlace
+import com.prayerwakeup.app.data.location.GeocodingService
 import com.prayerwakeup.app.data.location.LocationProvider
 import com.prayerwakeup.app.data.remote.AlAdhanClient
 import com.prayerwakeup.app.data.remote.MawaqitClient
@@ -67,6 +69,13 @@ sealed interface AlAdhanPreviewUiState {
     data class Error(val message: String) : AlAdhanPreviewUiState
 }
 
+sealed interface LocationSearchUiState {
+    data object Idle : LocationSearchUiState
+    data object Loading : LocationSearchUiState
+    data class Loaded(val places: List<GeoPlace>) : LocationSearchUiState
+    data class Error(val message: String) : LocationSearchUiState
+}
+
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
@@ -76,7 +85,8 @@ class SettingsViewModel @Inject constructor(
     private val moroccoHabousClient: MoroccoHabousClient,
     private val elevenLabsClient: ElevenLabsClient,
     private val mawaqitClient: MawaqitClient,
-    private val alAdhanClient: AlAdhanClient
+    private val alAdhanClient: AlAdhanClient,
+    private val geocodingService: GeocodingService
 ) : ViewModel() {
 
     private val _moroccoCities = MutableStateFlow<MoroccoCitiesUiState>(MoroccoCitiesUiState.Idle)
@@ -90,6 +100,9 @@ class SettingsViewModel @Inject constructor(
 
     private val _alAdhanPreview = MutableStateFlow<AlAdhanPreviewUiState>(AlAdhanPreviewUiState.Idle)
     val alAdhanPreview: StateFlow<AlAdhanPreviewUiState> = _alAdhanPreview.asStateFlow()
+
+    private val _locationSearch = MutableStateFlow<LocationSearchUiState>(LocationSearchUiState.Idle)
+    val locationSearch: StateFlow<LocationSearchUiState> = _locationSearch.asStateFlow()
 
     val uiState: StateFlow<SettingsUiState> = combine(
         settingsRepository.settingsFlow,
@@ -113,8 +126,14 @@ class SettingsViewModel @Inject constructor(
             val location = locationProvider.getCurrentLocation()
             locating = false
             if (location != null) {
+                // A raw GPS fix means nothing to the user in the settings list, so it's
+                // reverse-geocoded into an actual place name; if that fails (no geocoder
+                // backend, no network yet), fall back to the old generic label rather than
+                // blocking on it.
+                val place = geocodingService.reverseGeocode(location.latitude, location.longitude)
                 settingsRepository.updateLocation(
-                    location.latitude, location.longitude, locationProvider.deviceTimeZoneId(), "الموقع الحالي (GPS)"
+                    location.latitude, location.longitude, locationProvider.deviceTimeZoneId(),
+                    place?.label ?: "الموقع الحالي (GPS)"
                 )
                 alarmScheduler.rescheduleAll()
                 onResult(true)
@@ -129,6 +148,30 @@ class SettingsViewModel @Inject constructor(
             settingsRepository.updateLocation(latitude, longitude, timeZoneId, label)
             alarmScheduler.rescheduleAll()
         }
+    }
+
+    fun searchLocation(query: String) {
+        _locationSearch.value = LocationSearchUiState.Loading
+        viewModelScope.launch {
+            geocodingService.searchPlaces(query)
+                .onSuccess { _locationSearch.value = LocationSearchUiState.Loaded(it) }
+                .onFailure { _locationSearch.value = LocationSearchUiState.Error(it.message ?: "تعذر البحث") }
+        }
+    }
+
+    fun resetLocationSearch() {
+        _locationSearch.value = LocationSearchUiState.Idle
+    }
+
+    // A place found by name search has no GPS fix of its own, so there's no real timezone to
+    // read off it — the device's current zone is used as a practical default (correct for the
+    // very common case of finding a nearby city), same as the "use my GPS location" flow.
+    fun selectSearchedPlace(place: GeoPlace) {
+        viewModelScope.launch {
+            settingsRepository.updateLocation(place.latitude, place.longitude, locationProvider.deviceTimeZoneId(), place.label)
+            alarmScheduler.rescheduleAll()
+        }
+        _locationSearch.value = LocationSearchUiState.Idle
     }
 
     fun setCalculationMethod(method: CalculationMethod) {
