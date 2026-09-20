@@ -59,14 +59,15 @@ class AlAdhanClient @Inject constructor() {
         }
     }
 
-    // AlAdhan's own numbering for these five authorities; stable and well-documented across
-    // every client library built on this API.
+    // AlAdhan's own numbering for these authorities; stable and well-documented across every
+    // client library built on this API.
     private fun methodId(method: CalculationMethod): Int = when (method) {
         CalculationMethod.KARACHI -> 1
         CalculationMethod.ISNA -> 2
         CalculationMethod.MUSLIM_WORLD_LEAGUE -> 3
         CalculationMethod.UMM_AL_QURA -> 4
         CalculationMethod.EGYPTIAN -> 5
+        CalculationMethod.MOROCCO -> 21
     }
 
     private fun parseTimings(body: String, date: LocalDate, zoneId: ZoneId): Map<Prayer, ZonedDateTime> {

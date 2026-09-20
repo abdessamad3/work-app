@@ -16,7 +16,8 @@ enum class CalculationMethod(
     ISNA("الجمعية الإسلامية لأمريكا الشمالية", 15.0, 15.0, null),
     EGYPTIAN("الهيئة المصرية العامة للمساحة", 19.5, 17.5, null),
     UMM_AL_QURA("أم القرى (مكة المكرمة)", 18.5, null, 90),
-    KARACHI("جامعة العلوم الإسلامية - كراتشي", 18.0, 18.0, null);
+    KARACHI("جامعة العلوم الإسلامية - كراتشي", 18.0, 18.0, null),
+    MOROCCO("المغرب (وزارة الأوقاف والشؤون الإسلامية)", 19.0, 17.0, null);
 }
 
 enum class Madhab(val displayName: String, val asrShadowFactor: Double) {
