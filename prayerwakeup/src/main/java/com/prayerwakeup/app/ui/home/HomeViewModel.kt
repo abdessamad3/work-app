@@ -28,10 +28,12 @@ data class HomeUiState(
     val loading: Boolean = true,
     val hasLocation: Boolean = false,
     val locationLabel: String = "",
+    val sourceLabel: String = "",
     val hasApiKey: Boolean = false,
     val canScheduleExactAlarms: Boolean = true,
     val nextPrayer: Prayer? = null,
     val nextPrayerTime: ZonedDateTime? = null,
+    val nextPrayerIsTomorrow: Boolean = false,
     val todayTimes: List<Pair<Prayer, ZonedDateTime>> = emptyList(),
     val enabledPrayers: Set<Prayer> = emptySet()
 )
@@ -83,15 +85,22 @@ class HomeViewModel @Inject constructor(
             Prayer.MAGHRIB to times.maghrib,
             Prayer.ISHA to times.isha
         )
+        // Once today's Isha has passed, nothing in today's list is still ahead — without this
+        // fallback the "next prayer" card would just vanish for the rest of the evening instead
+        // of pointing at tomorrow's Fajr.
         val next = ordered.firstOrNull { it.second.isAfter(now) }
+            ?: (Prayer.FAJR to timesResolver.resolveForDate(settings, now.toLocalDate().plusDays(1), zoneId).fajr)
+        val nextIsTomorrow = ordered.none { it.first == next.first && it.second == next.second }
         _uiState.value = HomeUiState(
             loading = false,
             hasLocation = true,
             locationLabel = settings.locationLabel,
+            sourceLabel = settings.prayerTimeSource.displayName,
             hasApiKey = hasApiKey,
             canScheduleExactAlarms = alarmScheduler.canScheduleExactAlarms(),
-            nextPrayer = next?.first,
-            nextPrayerTime = next?.second,
+            nextPrayer = next.first,
+            nextPrayerTime = next.second,
+            nextPrayerIsTomorrow = nextIsTomorrow,
             todayTimes = ordered,
             enabledPrayers = settings.enabledPrayers
         )

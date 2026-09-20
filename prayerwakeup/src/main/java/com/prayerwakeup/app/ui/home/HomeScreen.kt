@@ -1,6 +1,7 @@
 package com.prayerwakeup.app.ui.home
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -8,38 +9,54 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Brightness4
+import androidx.compose.material.icons.filled.Brightness5
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.NightsStay
 import androidx.compose.material.icons.filled.PhoneInTalk
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.WbSunny
+import androidx.compose.material.icons.filled.WbTwilight
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.prayerwakeup.app.domain.Prayer
+import kotlinx.coroutines.delay
+import java.time.Duration
+import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -58,6 +75,16 @@ fun HomeScreen(onOpenSettings: () -> Unit, viewModel: HomeViewModel = hiltViewMo
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
+    // Ticks the countdown on the next-prayer card and keeps "next prayer" itself correct as
+    // time passes, without needing a full settings/network refresh every minute.
+    var now by remember { mutableStateOf(ZonedDateTime.now()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            now = ZonedDateTime.now()
+            delay(30_000)
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -72,7 +99,9 @@ fun HomeScreen(onOpenSettings: () -> Unit, viewModel: HomeViewModel = hiltViewMo
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
             if (state.loading) {
-                CircularProgressIndicator()
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
                 return@Column
             }
 
@@ -88,6 +117,9 @@ fun HomeScreen(onOpenSettings: () -> Unit, viewModel: HomeViewModel = hiltViewMo
                 }
                 return@Column
             }
+
+            LocationBadge(locationLabel = state.locationLabel, sourceLabel = state.sourceLabel, onClick = onOpenSettings)
+            Spacer(Modifier.height(12.dp))
 
             if (!state.canScheduleExactAlarms) {
                 WarningCard(
@@ -114,22 +146,38 @@ fun HomeScreen(onOpenSettings: () -> Unit, viewModel: HomeViewModel = hiltViewMo
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
                 ) {
                     Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("الصلاة القادمة", style = MaterialTheme.typography.labelLarge)
+                        Text(
+                            if (state.nextPrayerIsTomorrow) "الصلاة القادمة (غداً)" else "الصلاة القادمة",
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Icon(
+                            prayer.icon(),
+                            contentDescription = null,
+                            modifier = Modifier.size(36.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                         Spacer(Modifier.height(4.dp))
                         Text(prayer.arabicName, style = MaterialTheme.typography.headlineMedium)
                         if (time != null) {
                             Spacer(Modifier.height(4.dp))
                             Text(time.format(timeFormatter), style = MaterialTheme.typography.titleLarge)
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                remainingLabel(now, time),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                            )
                         }
                         Spacer(Modifier.height(12.dp))
-                        OutlinedButton(onClick = { viewModel.testCallNow(prayer) }) {
-                            Icon(Icons.Filled.PhoneInTalk, contentDescription = null)
+                        TextButton(onClick = { viewModel.testCallNow(prayer) }) {
+                            Icon(Icons.Filled.PhoneInTalk, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
                             Text("اختبار المكالمة الآن")
                         }
                     }
                 }
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(20.dp))
             }
 
             Text("مواقيت اليوم", style = MaterialTheme.typography.titleMedium)
@@ -137,19 +185,88 @@ fun HomeScreen(onOpenSettings: () -> Unit, viewModel: HomeViewModel = hiltViewMo
             LazyColumn {
                 items(state.todayTimes) { (prayer, time) ->
                     val enabled = state.enabledPrayers.contains(prayer)
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(prayer.arabicName, style = MaterialTheme.typography.bodyLarge)
-                        Row {
-                            if (!enabled) {
-                                Text("(متوقف) ", color = MaterialTheme.colorScheme.outline)
-                            }
-                            Text(time.format(timeFormatter), style = MaterialTheme.typography.bodyLarge)
-                        }
-                    }
+                    val isNext = !state.nextPrayerIsTomorrow && prayer == state.nextPrayer
+                    val isPast = time.isBefore(now)
+                    PrayerRow(prayer = prayer, time = time.format(timeFormatter), enabled = enabled, isNext = isNext, isPast = isPast)
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LocationBadge(locationLabel: String, sourceLabel: String, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Filled.LocationOn,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.width(8.dp))
+            Column {
+                Text(
+                    locationLabel.ifBlank { "الموقع" },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (sourceLabel.isNotBlank()) {
+                    Text(
+                        sourceLabel,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PrayerRow(prayer: Prayer, time: String, enabled: Boolean, isNext: Boolean, isPast: Boolean) {
+    val contentColor = when {
+        isNext -> MaterialTheme.colorScheme.primary
+        isPast -> MaterialTheme.colorScheme.outline
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = if (isNext) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f) else MaterialTheme.colorScheme.surface,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(prayer.icon(), contentDescription = null, tint = contentColor, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    prayer.arabicName,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = contentColor,
+                    fontWeight = if (isNext) FontWeight.Bold else FontWeight.Normal
+                )
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (!enabled) {
+                    Text("(متوقف) ", color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall)
+                }
+                Text(
+                    time,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = contentColor,
+                    fontWeight = if (isNext) FontWeight.Bold else FontWeight.Normal
+                )
             }
         }
     }
@@ -169,3 +286,21 @@ private fun WarningCard(message: String, actionLabel: String, onAction: () -> Un
     }
 }
 
+private fun Prayer.icon(): ImageVector = when (this) {
+    Prayer.FAJR -> Icons.Filled.WbTwilight
+    Prayer.DHUHR -> Icons.Filled.WbSunny
+    Prayer.ASR -> Icons.Filled.Brightness5
+    Prayer.MAGHRIB -> Icons.Filled.Brightness4
+    Prayer.ISHA -> Icons.Filled.NightsStay
+}
+
+private fun remainingLabel(now: ZonedDateTime, target: ZonedDateTime): String {
+    val remaining = Duration.between(now, target)
+    if (remaining.isNegative) return "الآن"
+    val hours = remaining.toHours()
+    val minutes = remaining.toMinutes() % 60
+    return when {
+        hours > 0 -> "متبقٍ: ${hours} س ${minutes} د"
+        else -> "متبقٍ: ${minutes} د"
+    }
+}
