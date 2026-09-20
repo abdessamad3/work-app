@@ -126,6 +126,9 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
                     selectedMosqueLabel = state.settings.mawaqitMosqueLabel
                 )
             }
+            if (state.settings.prayerTimeSource == PrayerTimeSource.ALADHAN) {
+                AlAdhanPreviewSection(viewModel = viewModel)
+            }
 
             Divider(Modifier.padding(vertical = 20.dp))
 
@@ -414,6 +417,52 @@ private fun MawaqitPreview(times: MawaqitTimes) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.outline
         )
+    }
+}
+
+@Composable
+private fun AlAdhanPreviewSection(viewModel: SettingsViewModel) {
+    val previewState by viewModel.alAdhanPreview.collectAsState()
+    val formatter = remember { java.time.format.DateTimeFormatter.ofPattern("HH:mm") }
+
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        if (previewState is AlAdhanPreviewUiState.Idle) viewModel.previewAlAdhan()
+    }
+
+    Column(Modifier.padding(top = 8.dp, start = 40.dp)) {
+        Text(
+            "تُستخدم طريقة الحساب والمذهب المختارين أدناه لجلب المواقيت الرسمية من هذه الخدمة عند توفر الإنترنت.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline
+        )
+        Spacer(Modifier.height(8.dp))
+        when (val s = previewState) {
+            is AlAdhanPreviewUiState.Idle -> {
+                Button(onClick = { viewModel.previewAlAdhan() }) { Text("تجربة الاتصال بالخدمة") }
+            }
+            is AlAdhanPreviewUiState.Loading -> {
+                Text("جارٍ جلب مواقيت اليوم...", color = MaterialTheme.colorScheme.outline)
+            }
+            is AlAdhanPreviewUiState.Error -> {
+                Text(
+                    "تعذر الاتصال بالخدمة: ${s.message}. سيُستخدم الحساب الفلكي بدلاً منها تلقائياً حتى تعاود المحاولة.",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Spacer(Modifier.height(8.dp))
+                TextButton(onClick = { viewModel.previewAlAdhan() }) { Text("إعادة المحاولة") }
+            }
+            is AlAdhanPreviewUiState.Loaded -> {
+                Text("مواقيت اليوم من الخدمة:", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    Prayer.entries.joinToString(" · ") { prayer ->
+                        "${prayer.arabicName} ${s.times[prayer]?.format(formatter) ?: "--"}"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+            }
+        }
     }
 }
 

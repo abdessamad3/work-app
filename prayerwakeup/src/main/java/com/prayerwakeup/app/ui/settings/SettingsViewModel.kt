@@ -6,6 +6,7 @@ import com.prayerwakeup.app.alarm.AlarmScheduler
 import com.prayerwakeup.app.conversation.ElevenLabsClient
 import com.prayerwakeup.app.conversation.ElevenLabsVoice
 import com.prayerwakeup.app.data.location.LocationProvider
+import com.prayerwakeup.app.data.remote.AlAdhanClient
 import com.prayerwakeup.app.data.remote.MawaqitClient
 import com.prayerwakeup.app.data.remote.MawaqitTimes
 import com.prayerwakeup.app.data.remote.MoroccoCity
@@ -26,6 +27,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZonedDateTime
 import javax.inject.Inject
 
 data class SettingsUiState(
@@ -56,6 +60,13 @@ sealed interface MawaqitLookupUiState {
     data class Error(val message: String) : MawaqitLookupUiState
 }
 
+sealed interface AlAdhanPreviewUiState {
+    data object Idle : AlAdhanPreviewUiState
+    data object Loading : AlAdhanPreviewUiState
+    data class Loaded(val times: Map<Prayer, ZonedDateTime>) : AlAdhanPreviewUiState
+    data class Error(val message: String) : AlAdhanPreviewUiState
+}
+
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
@@ -64,7 +75,8 @@ class SettingsViewModel @Inject constructor(
     private val alarmScheduler: AlarmScheduler,
     private val moroccoHabousClient: MoroccoHabousClient,
     private val elevenLabsClient: ElevenLabsClient,
-    private val mawaqitClient: MawaqitClient
+    private val mawaqitClient: MawaqitClient,
+    private val alAdhanClient: AlAdhanClient
 ) : ViewModel() {
 
     private val _moroccoCities = MutableStateFlow<MoroccoCitiesUiState>(MoroccoCitiesUiState.Idle)
@@ -75,6 +87,9 @@ class SettingsViewModel @Inject constructor(
 
     private val _mawaqitLookup = MutableStateFlow<MawaqitLookupUiState>(MawaqitLookupUiState.Idle)
     val mawaqitLookup: StateFlow<MawaqitLookupUiState> = _mawaqitLookup.asStateFlow()
+
+    private val _alAdhanPreview = MutableStateFlow<AlAdhanPreviewUiState>(AlAdhanPreviewUiState.Idle)
+    val alAdhanPreview: StateFlow<AlAdhanPreviewUiState> = _alAdhanPreview.asStateFlow()
 
     val uiState: StateFlow<SettingsUiState> = combine(
         settingsRepository.settingsFlow,
@@ -162,6 +177,9 @@ class SettingsViewModel @Inject constructor(
         if (source == PrayerTimeSource.MOROCCO_HABOUS && _moroccoCities.value is MoroccoCitiesUiState.Idle) {
             loadMoroccoCities()
         }
+        if (source == PrayerTimeSource.ALADHAN) {
+            previewAlAdhan()
+        }
     }
 
     fun loadMoroccoCities() {
@@ -224,5 +242,21 @@ class SettingsViewModel @Inject constructor(
 
     fun resetMawaqitLookup() {
         _mawaqitLookup.value = MawaqitLookupUiState.Idle
+    }
+
+    // AlAdhan needs no per-user setup (it just reuses the location + method + madhab already
+    // configured for the offline calculator), so this preview is purely reassurance that the
+    // service is reachable and returning sane values — not a precondition to selecting it.
+    fun previewAlAdhan() {
+        _alAdhanPreview.value = AlAdhanPreviewUiState.Loading
+        viewModelScope.launch {
+            val settings = uiState.value.settings
+            val zoneId = runCatching { ZoneId.of(settings.timeZoneId) }.getOrDefault(ZoneId.systemDefault())
+            alAdhanClient.fetchTodayTimes(
+                settings.latitude, settings.longitude, LocalDate.now(zoneId), zoneId, settings.calculationMethod, settings.madhab
+            )
+                .onSuccess { _alAdhanPreview.value = AlAdhanPreviewUiState.Loaded(it) }
+                .onFailure { _alAdhanPreview.value = AlAdhanPreviewUiState.Error(it.message ?: "تعذر جلب مواقيت اليوم") }
+        }
     }
 }

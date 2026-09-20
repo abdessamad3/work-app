@@ -1,5 +1,6 @@
 package com.prayerwakeup.app.data
 
+import com.prayerwakeup.app.data.remote.AlAdhanClient
 import com.prayerwakeup.app.data.remote.MawaqitClient
 import com.prayerwakeup.app.data.remote.MoroccoHabousClient
 import com.prayerwakeup.app.data.settings.PrayerSettings
@@ -27,7 +28,8 @@ import javax.inject.Singleton
 class PrayerTimesResolver @Inject constructor(
     private val calculator: PrayerTimeCalculator,
     private val moroccoHabousClient: MoroccoHabousClient,
-    private val mawaqitClient: MawaqitClient
+    private val mawaqitClient: MawaqitClient,
+    private val alAdhanClient: AlAdhanClient
 ) {
     suspend fun resolveForDate(settings: PrayerSettings, date: LocalDate, zoneId: ZoneId): PrayerTimesResult {
         val offline = calculator.calculate(
@@ -38,6 +40,7 @@ class PrayerTimesResolver @Inject constructor(
         return when (settings.prayerTimeSource) {
             PrayerTimeSource.MOROCCO_HABOUS -> resolveMoroccoHabous(settings, offline, date, zoneId)
             PrayerTimeSource.MAWAQIT_MOSQUE -> resolveMawaqit(settings, offline, date, zoneId)
+            PrayerTimeSource.ALADHAN -> resolveAlAdhan(settings, offline, date, zoneId)
             PrayerTimeSource.OFFLINE_CALCULATION -> offline
         }
     }
@@ -74,6 +77,21 @@ class PrayerTimesResolver @Inject constructor(
             asr = toZoned(remote.asr) ?: offline.asr,
             maghrib = toZoned(remote.maghrib) ?: offline.maghrib,
             isha = toZoned(remote.isha) ?: offline.isha
+        )
+    }
+
+    private suspend fun resolveAlAdhan(
+        settings: PrayerSettings, offline: PrayerTimesResult, date: LocalDate, zoneId: ZoneId
+    ): PrayerTimesResult {
+        val remote = alAdhanClient.fetchTodayTimes(
+            settings.latitude, settings.longitude, date, zoneId, settings.calculationMethod, settings.madhab
+        ).getOrNull() ?: return offline
+        return offline.copy(
+            fajr = remote[Prayer.FAJR] ?: offline.fajr,
+            dhuhr = remote[Prayer.DHUHR] ?: offline.dhuhr,
+            asr = remote[Prayer.ASR] ?: offline.asr,
+            maghrib = remote[Prayer.MAGHRIB] ?: offline.maghrib,
+            isha = remote[Prayer.ISHA] ?: offline.isha
         )
     }
 }
