@@ -14,7 +14,6 @@ import androidx.glance.appwidget.provideContent
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
-import androidx.glance.layout.defaultWeight
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
@@ -104,7 +103,8 @@ private fun WidgetContent(nextName: String, nextTime: String, rows: List<Pair<St
         Spacer(GlanceModifier.height(8.dp))
         rows.forEach { (name, time) ->
             Row(modifier = GlanceModifier.fillMaxWidth()) {
-                Text(name, style = TextStyle(fontSize = 12.sp), modifier = GlanceModifier.defaultWeight())
+                Text(name, style = TextStyle(fontSize = 12.sp))
+                Spacer(GlanceModifier.width(16.dp))
                 Text(time, style = TextStyle(fontSize = 12.sp))
             }
         }
