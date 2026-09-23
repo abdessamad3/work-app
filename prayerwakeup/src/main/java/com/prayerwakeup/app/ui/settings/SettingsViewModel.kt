@@ -21,6 +21,7 @@ import com.prayerwakeup.app.domain.CallerPersona
 import com.prayerwakeup.app.domain.Madhab
 import com.prayerwakeup.app.domain.Prayer
 import com.prayerwakeup.app.domain.PrayerTimeSource
+import com.prayerwakeup.app.domain.WakeChallenge
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -206,6 +207,10 @@ class SettingsViewModel @Inject constructor(
 
     fun setPersona(persona: CallerPersona) {
         viewModelScope.launch { settingsRepository.updatePersona(persona) }
+    }
+
+    fun setWakeChallenge(challenge: WakeChallenge) {
+        viewModelScope.launch { settingsRepository.updateWakeChallenge(challenge) }
     }
 
     fun saveGeminiApiKey(key: String) {

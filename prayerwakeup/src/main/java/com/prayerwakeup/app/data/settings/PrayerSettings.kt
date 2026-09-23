@@ -5,6 +5,7 @@ import com.prayerwakeup.app.domain.CallerPersona
 import com.prayerwakeup.app.domain.Madhab
 import com.prayerwakeup.app.domain.Prayer
 import com.prayerwakeup.app.domain.PrayerTimeSource
+import com.prayerwakeup.app.domain.WakeChallenge
 
 data class PrayerSettings(
     val hasLocation: Boolean = false,
@@ -25,5 +26,6 @@ data class PrayerSettings(
     val elevenLabsVoiceId: String = "",
     val elevenLabsVoiceLabel: String = "",
     val mawaqitMosqueId: String = "",
-    val mawaqitMosqueLabel: String = ""
+    val mawaqitMosqueLabel: String = "",
+    val wakeChallenge: WakeChallenge = WakeChallenge.NONE
 )

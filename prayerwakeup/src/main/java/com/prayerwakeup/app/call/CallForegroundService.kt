@@ -11,6 +11,7 @@ import com.prayerwakeup.app.conversation.ConversationManager
 import com.prayerwakeup.app.data.settings.SettingsRepository
 import com.prayerwakeup.app.data.tracking.PrayerLogRepository
 import com.prayerwakeup.app.domain.Prayer
+import com.prayerwakeup.app.domain.WakeChallenge
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -45,7 +46,7 @@ class CallForegroundService : Service() {
                 val prayerName = intent.getStringExtra(EXTRA_PRAYER)
                 val prayer = prayerName?.let { runCatching { Prayer.valueOf(it) }.getOrNull() }
                 if (prayer != null) {
-                    beginCall(prayer)
+                    serviceScope.launch { beginCall(prayer) }
                 } else {
                     stopSelf()
                 }
@@ -59,10 +60,11 @@ class CallForegroundService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun beginCall(prayer: Prayer) {
+    private suspend fun beginCall(prayer: Prayer) {
         cancelled.set(false)
+        val wakeChallenge = settingsRepository.settingsFlow.first().wakeChallenge
         startForeground(NOTIFICATION_ID, buildForegroundNotification(prayer))
-        postFullScreenCallNotification(prayer)
+        postFullScreenCallNotification(prayer, wakeChallenge)
         ringtonePlayer.start()
         sessionController.startRinging(prayer)
 
@@ -151,7 +153,7 @@ class CallForegroundService : Service() {
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .build()
 
-    private fun postFullScreenCallNotification(prayer: Prayer) {
+    private fun postFullScreenCallNotification(prayer: Prayer, wakeChallenge: WakeChallenge) {
         val fullScreenIntent = Intent(this, IncomingCallActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         }
@@ -159,13 +161,21 @@ class CallForegroundService : Service() {
             this, 0, fullScreenIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val declineIntent = Intent(this, CallForegroundService::class.java).apply {
-            action = ACTION_DECLINE_CALL
+        // A notification action can only fire a PendingIntent, not run the challenge UI itself —
+        // so once a wake-up challenge is configured, "رفض" here just opens the same full-screen
+        // call screen (where the challenge is enforced) instead of declining directly, closing
+        // the one bypass that let a plain tap-and-dismiss skip the challenge entirely.
+        val declinePendingIntent = if (wakeChallenge == WakeChallenge.NONE) {
+            val declineIntent = Intent(this, CallForegroundService::class.java).apply {
+                action = ACTION_DECLINE_CALL
+            }
+            PendingIntent.getService(
+                this, 1, declineIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        } else {
+            fullScreenPendingIntent
         }
-        val declinePendingIntent = PendingIntent.getService(
-            this, 1, declineIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
         val notification = NotificationCompat.Builder(this, PrayerWakeupApp.CALL_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setContentTitle("حان وقت صلاة ${prayer.arabicName}")
@@ -174,7 +184,11 @@ class CallForegroundService : Service() {
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setFullScreenIntent(fullScreenPendingIntent, true)
             .setContentIntent(fullScreenPendingIntent)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "رفض", declinePendingIntent)
+            .addAction(
+                android.R.drawable.ic_menu_close_clear_cancel,
+                if (wakeChallenge == WakeChallenge.NONE) "رفض" else "فتح",
+                declinePendingIntent
+            )
             .setAutoCancel(true)
             .build()
         getSystemService(android.app.NotificationManager::class.java)

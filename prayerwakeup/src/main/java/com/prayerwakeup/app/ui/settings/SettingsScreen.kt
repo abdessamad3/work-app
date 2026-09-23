@@ -59,6 +59,7 @@ import com.prayerwakeup.app.domain.CallerPersona
 import com.prayerwakeup.app.domain.Madhab
 import com.prayerwakeup.app.domain.Prayer
 import com.prayerwakeup.app.domain.PrayerTimeSource
+import com.prayerwakeup.app.domain.WakeChallenge
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -203,6 +204,22 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
                     range = 1..10,
                     onChange = { viewModel.setMaxCallMinutes(it) }
                 )
+
+                Spacer(Modifier.height(16.dp))
+                SubsectionTitle("تحدي إيقاظ قبل قبول الرفض")
+                Text(
+                    "لمنع رفض المكالمة دون استيقاظ فعلي، يمكنك طلب إتمام مهمة صغيرة أولاً — بدونها لا يُعتبر الرفض مقبولاً وتستمر المكالمة.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+                Spacer(Modifier.height(8.dp))
+                WakeChallenge.entries.forEach { challenge ->
+                    RadioRow(
+                        label = challenge.displayName,
+                        selected = state.settings.wakeChallenge == challenge,
+                        onClick = { viewModel.setWakeChallenge(challenge) }
+                    )
+                }
             }
 
             ExpandableSection(title = "الذكاء الاصطناعي والصوت", icon = Icons.Filled.RecordVoiceOver) {

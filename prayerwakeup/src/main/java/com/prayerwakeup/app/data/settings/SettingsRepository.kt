@@ -13,6 +13,7 @@ import com.prayerwakeup.app.domain.CallerPersona
 import com.prayerwakeup.app.domain.Madhab
 import com.prayerwakeup.app.domain.Prayer
 import com.prayerwakeup.app.domain.PrayerTimeSource
+import com.prayerwakeup.app.domain.WakeChallenge
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -45,6 +46,7 @@ class SettingsRepository @Inject constructor(
         val ELEVENLABS_VOICE_LABEL = stringPreferencesKey("elevenlabs_voice_label")
         val MAWAQIT_MOSQUE_ID = stringPreferencesKey("mawaqit_mosque_id")
         val MAWAQIT_MOSQUE_LABEL = stringPreferencesKey("mawaqit_mosque_label")
+        val WAKE_CHALLENGE = stringPreferencesKey("wake_challenge")
     }
 
     val settingsFlow: Flow<PrayerSettings> = context.settingsDataStore.data.map { prefs ->
@@ -74,7 +76,9 @@ class SettingsRepository @Inject constructor(
             elevenLabsVoiceId = prefs[Keys.ELEVENLABS_VOICE_ID] ?: defaults.elevenLabsVoiceId,
             elevenLabsVoiceLabel = prefs[Keys.ELEVENLABS_VOICE_LABEL] ?: defaults.elevenLabsVoiceLabel,
             mawaqitMosqueId = prefs[Keys.MAWAQIT_MOSQUE_ID] ?: defaults.mawaqitMosqueId,
-            mawaqitMosqueLabel = prefs[Keys.MAWAQIT_MOSQUE_LABEL] ?: defaults.mawaqitMosqueLabel
+            mawaqitMosqueLabel = prefs[Keys.MAWAQIT_MOSQUE_LABEL] ?: defaults.mawaqitMosqueLabel,
+            wakeChallenge = prefs[Keys.WAKE_CHALLENGE]?.let { runCatching { WakeChallenge.valueOf(it) }.getOrNull() }
+                ?: defaults.wakeChallenge
         )
     }
 
@@ -139,5 +143,9 @@ class SettingsRepository @Inject constructor(
             prefs[Keys.MAWAQIT_MOSQUE_ID] = id
             prefs[Keys.MAWAQIT_MOSQUE_LABEL] = label
         }
+    }
+
+    suspend fun updateWakeChallenge(challenge: WakeChallenge) {
+        context.settingsDataStore.edit { it[Keys.WAKE_CHALLENGE] = challenge.name }
     }
 }
