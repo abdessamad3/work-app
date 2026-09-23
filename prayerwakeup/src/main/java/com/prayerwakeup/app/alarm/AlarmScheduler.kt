@@ -5,11 +5,13 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import androidx.glance.appwidget.updateAll
 import com.prayerwakeup.app.data.PrayerTimesResolver
 import com.prayerwakeup.app.data.settings.SchedulingStatusStore
 import com.prayerwakeup.app.data.settings.SettingsRepository
 import com.prayerwakeup.app.domain.Prayer
 import com.prayerwakeup.app.domain.PrayerTimeCalculator
+import com.prayerwakeup.app.widget.PrayerGlanceWidget
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
 import java.time.ZoneId
@@ -34,7 +36,10 @@ class AlarmScheduler @Inject constructor(
         Prayer.entries.forEach { cancelPrayer(it) }
         cancelRefresh()
 
-        if (!settings.hasLocation) return
+        if (!settings.hasLocation) {
+            runCatching { PrayerGlanceWidget.updateAll(context) }
+            return
+        }
         val zoneId = runCatching { ZoneId.of(settings.timeZoneId) }.getOrDefault(ZoneId.systemDefault())
         val now = ZonedDateTime.now(zoneId)
         val today = now.toLocalDate()
@@ -58,6 +63,7 @@ class AlarmScheduler @Inject constructor(
         scheduleExact(REFRESH_REQUEST_CODE, refreshTarget, buildRefreshIntent())
 
         schedulingStatusStore.recordSuccess(settings.enabledPrayers.size)
+        runCatching { PrayerGlanceWidget.updateAll(context) }
     }
 
     fun cancelPrayer(prayer: Prayer) {

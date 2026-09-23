@@ -71,6 +71,17 @@
             </intent-filter>
         </receiver>
 
+        <receiver
+            android:name=".widget.PrayerGlanceWidgetReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/prayer_widget_info" />
+        </receiver>
+
         <!-- WorkManager is configured explicitly via Configuration.Provider in
              PrayerWakeupApp (so its worker factory can inject Hilt dependencies), so its
              default auto-init must be disabled here to avoid a duplicate initialization. -->
