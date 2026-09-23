@@ -2,6 +2,7 @@ package com.prayerwakeup.app.widget
 
 import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
@@ -10,7 +11,11 @@ import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
+import androidx.glance.appwidget.appWidgetBackground
+import androidx.glance.appwidget.cornerRadius
+import androidx.glance.appwidget.defaultWeight
 import androidx.glance.appwidget.provideContent
+import androidx.glance.background
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
@@ -18,10 +23,10 @@ import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
-import androidx.glance.layout.width
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
+import androidx.glance.unit.ColorProvider
 import com.prayerwakeup.app.MainActivity
 import com.prayerwakeup.app.data.PrayerTimesResolver
 import com.prayerwakeup.app.data.settings.SettingsRepository
@@ -45,6 +50,13 @@ interface PrayerWidgetEntryPoint {
     fun timesResolver(): PrayerTimesResolver
 }
 
+// Matches PrayerWakeupTheme's light-mode colors (ui/theme/Theme.kt) so the widget doesn't look
+// like an unstyled placeholder next to the rest of the app.
+private val CardBackground = Color(0xFF0B3D2E)
+private val AccentGold = Color(0xFFF2C94C)
+private val OnCard = Color(0xFFF4F4F0)
+private val OnCardMuted = Color(0xFFCBD6CF)
+
 object PrayerGlanceWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val entryPoint = EntryPointAccessors.fromApplication(context, PrayerWidgetEntryPoint::class.java)
@@ -55,12 +67,13 @@ object PrayerGlanceWidget : GlanceAppWidget() {
 
         if (!settings.hasLocation) {
             provideContent {
-                Column(
-                    modifier = GlanceModifier.fillMaxSize().padding(12.dp).clickable(actionStartActivity<MainActivity>())
-                ) {
-                    Text("صلاتي", style = TextStyle(fontWeight = FontWeight.Bold, fontSize = 16.sp))
-                    Spacer(GlanceModifier.height(4.dp))
-                    Text("لم يُحدد الموقع بعد، افتح التطبيق لإعداده")
+                CardContainer {
+                    Text("صلاتي", style = TextStyle(fontWeight = FontWeight.Bold, fontSize = 16.sp, color = ColorProvider(OnCard)))
+                    Spacer(GlanceModifier.height(6.dp))
+                    Text(
+                        "لم يُحدد الموقع بعد، افتح التطبيق لإعداده",
+                        style = TextStyle(fontSize = 12.sp, color = ColorProvider(OnCardMuted))
+                    )
                 }
             }
             return
@@ -90,22 +103,45 @@ object PrayerGlanceWidget : GlanceAppWidget() {
 }
 
 @Composable
-private fun WidgetContent(nextName: String, nextTime: String, rows: List<Pair<String, String>>) {
+private fun CardContainer(content: @Composable () -> Unit) {
     Column(
-        modifier = GlanceModifier.fillMaxSize().padding(12.dp).clickable(actionStartActivity<MainActivity>())
+        modifier = GlanceModifier
+            .fillMaxSize()
+            .background(CardBackground)
+            .appWidgetBackground()
+            .cornerRadius(20.dp)
+            .padding(16.dp)
+            .clickable(actionStartActivity<MainActivity>())
     ) {
-        Text("الصلاة القادمة", style = TextStyle(fontSize = 11.sp))
-        Row {
-            Text(nextName, style = TextStyle(fontWeight = FontWeight.Bold, fontSize = 20.sp))
-            Spacer(GlanceModifier.width(8.dp))
-            Text(nextTime, style = TextStyle(fontWeight = FontWeight.Bold, fontSize = 20.sp))
+        content()
+    }
+}
+
+@Composable
+private fun WidgetContent(nextName: String, nextTime: String, rows: List<Pair<String, String>>) {
+    CardContainer {
+        Text("الصلاة القادمة", style = TextStyle(fontSize = 11.sp, color = ColorProvider(OnCardMuted)))
+        Spacer(GlanceModifier.height(2.dp))
+        Row(modifier = GlanceModifier.fillMaxWidth()) {
+            Text(
+                nextName,
+                style = TextStyle(fontWeight = FontWeight.Bold, fontSize = 22.sp, color = ColorProvider(OnCard)),
+                modifier = GlanceModifier.defaultWeight()
+            )
+            Text(
+                nextTime,
+                style = TextStyle(fontWeight = FontWeight.Bold, fontSize = 22.sp, color = ColorProvider(AccentGold))
+            )
         }
-        Spacer(GlanceModifier.height(8.dp))
+        Spacer(GlanceModifier.height(12.dp))
         rows.forEach { (name, time) ->
-            Row(modifier = GlanceModifier.fillMaxWidth()) {
-                Text(name, style = TextStyle(fontSize = 12.sp))
-                Spacer(GlanceModifier.width(16.dp))
-                Text(time, style = TextStyle(fontSize = 12.sp))
+            Row(modifier = GlanceModifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                Text(
+                    name,
+                    style = TextStyle(fontSize = 13.sp, color = ColorProvider(OnCardMuted)),
+                    modifier = GlanceModifier.defaultWeight()
+                )
+                Text(time, style = TextStyle(fontSize = 13.sp, color = ColorProvider(OnCard)))
             }
         }
     }
