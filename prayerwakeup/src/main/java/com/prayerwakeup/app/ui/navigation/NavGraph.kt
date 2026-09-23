@@ -6,6 +6,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.prayerwakeup.app.ui.home.HomeScreen
+import com.prayerwakeup.app.ui.qibla.QiblaScreen
 import com.prayerwakeup.app.ui.settings.SettingsScreen
 import com.prayerwakeup.app.ui.stats.StatisticsScreen
 
@@ -15,7 +16,8 @@ fun PrayerWakeupNavGraph(navController: NavHostController = rememberNavControlle
         composable(Routes.HOME) {
             HomeScreen(
                 onOpenSettings = { navController.navigate(Routes.SETTINGS) },
-                onOpenStatistics = { navController.navigate(Routes.STATISTICS) }
+                onOpenStatistics = { navController.navigate(Routes.STATISTICS) },
+                onOpenQibla = { navController.navigate(Routes.QIBLA) }
             )
         }
         composable(Routes.SETTINGS) {
@@ -23,6 +25,9 @@ fun PrayerWakeupNavGraph(navController: NavHostController = rememberNavControlle
         }
         composable(Routes.STATISTICS) {
             StatisticsScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Routes.QIBLA) {
+            QiblaScreen(onBack = { navController.popBackStack() })
         }
     }
 }

@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.NightsStay
 import androidx.compose.material.icons.filled.PhoneInTalk
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
@@ -65,7 +66,12 @@ import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(onOpenSettings: () -> Unit, onOpenStatistics: () -> Unit, viewModel: HomeViewModel = hiltViewModel()) {
+fun HomeScreen(
+    onOpenSettings: () -> Unit,
+    onOpenStatistics: () -> Unit,
+    onOpenQibla: () -> Unit,
+    viewModel: HomeViewModel = hiltViewModel()
+) {
     val state by viewModel.uiState.collectAsState()
     val timeFormatter = remember { DateTimeFormatter.ofPattern("hh:mm a") }
 
@@ -94,6 +100,9 @@ fun HomeScreen(onOpenSettings: () -> Unit, onOpenStatistics: () -> Unit, viewMod
             TopAppBar(
                 title = { Text("صلاتي") },
                 actions = {
+                    IconButton(onClick = onOpenQibla) {
+                        Icon(Icons.Filled.Explore, contentDescription = "اتجاه القبلة")
+                    }
                     IconButton(onClick = onOpenStatistics) {
                         Icon(Icons.Filled.BarChart, contentDescription = "الإحصائيات")
                     }
@@ -126,10 +135,43 @@ fun HomeScreen(onOpenSettings: () -> Unit, onOpenStatistics: () -> Unit, viewMod
             }
 
             LocationBadge(locationLabel = state.locationLabel, sourceLabel = state.sourceLabel, onClick = onOpenSettings)
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
+
+            if (state.hijriLabel.isNotBlank()) {
+                Text(
+                    state.hijriLabel,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+                Spacer(Modifier.height(4.dp))
+            }
+            if (state.isRamadan) {
+                Text(
+                    "رمضان مبارك",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(Modifier.height(8.dp))
+            }
 
             StatusCard(state = state, now = now, onClick = onOpenSettings)
             Spacer(Modifier.height(12.dp))
+
+            if (state.dailyAthkar.isNotBlank()) {
+                Surface(
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        state.dailyAthkar,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.fillMaxWidth().padding(14.dp)
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+            }
 
             if (!state.canScheduleExactAlarms) {
                 WarningCard(

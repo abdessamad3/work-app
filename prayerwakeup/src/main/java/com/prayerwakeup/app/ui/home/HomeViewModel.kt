@@ -18,6 +18,8 @@ import com.prayerwakeup.app.data.settings.SecureKeyStore
 import com.prayerwakeup.app.data.settings.SettingsRepository
 import com.prayerwakeup.app.data.tracking.PrayerLogEntry
 import com.prayerwakeup.app.data.tracking.PrayerLogRepository
+import com.prayerwakeup.app.domain.DailyAthkar
+import com.prayerwakeup.app.domain.HijriDate
 import com.prayerwakeup.app.domain.Prayer
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -47,7 +49,10 @@ data class HomeUiState(
     val nextPrayerIsTomorrow: Boolean = false,
     val todayTimes: List<Pair<Prayer, ZonedDateTime>> = emptyList(),
     val enabledPrayers: Set<Prayer> = emptySet(),
-    val prayedToday: Set<Prayer> = emptySet()
+    val prayedToday: Set<Prayer> = emptySet(),
+    val hijriLabel: String = "",
+    val isRamadan: Boolean = false,
+    val dailyAthkar: String = ""
 ) {
     val allDiagnosticsOk: Boolean
         get() = canScheduleExactAlarms && batteryOptimizationExempt && notificationsEnabled
@@ -119,6 +124,10 @@ class HomeViewModel @Inject constructor(
     }
 
     private suspend fun applySettings(settings: PrayerSettings, hasApiKey: Boolean, status: SchedulingStatus, prayedToday: Set<Prayer>) {
+        val today = LocalDate.now()
+        val hijri = HijriDate.forDate(today)
+        val athkar = DailyAthkar.forDate(today)
+
         if (!settings.hasLocation) {
             _uiState.value = HomeUiState(
                 loading = false,
@@ -129,7 +138,10 @@ class HomeViewModel @Inject constructor(
                 notificationsEnabled = areNotificationsEnabled(),
                 schedulingStatus = status,
                 enabledPrayers = settings.enabledPrayers,
-                prayedToday = prayedToday
+                prayedToday = prayedToday,
+                hijriLabel = hijri.displayLabel,
+                isRamadan = hijri.isRamadan,
+                dailyAthkar = athkar
             )
             return
         }
@@ -164,7 +176,10 @@ class HomeViewModel @Inject constructor(
             nextPrayerIsTomorrow = nextIsTomorrow,
             todayTimes = ordered,
             enabledPrayers = settings.enabledPrayers,
-            prayedToday = prayedToday
+            prayedToday = prayedToday,
+            hijriLabel = hijri.displayLabel,
+            isRamadan = hijri.isRamadan,
+            dailyAthkar = athkar
         )
     }
 
