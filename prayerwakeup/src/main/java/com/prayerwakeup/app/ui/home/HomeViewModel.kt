@@ -1,7 +1,10 @@
 package com.prayerwakeup.app.ui.home
 
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
+import android.os.Build
+import android.os.PowerManager
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -9,6 +12,8 @@ import com.prayerwakeup.app.alarm.AlarmScheduler
 import com.prayerwakeup.app.call.CallForegroundService
 import com.prayerwakeup.app.data.PrayerTimesResolver
 import com.prayerwakeup.app.data.settings.PrayerSettings
+import com.prayerwakeup.app.data.settings.SchedulingStatus
+import com.prayerwakeup.app.data.settings.SchedulingStatusStore
 import com.prayerwakeup.app.data.settings.SecureKeyStore
 import com.prayerwakeup.app.data.settings.SettingsRepository
 import com.prayerwakeup.app.domain.Prayer
@@ -31,12 +36,18 @@ data class HomeUiState(
     val sourceLabel: String = "",
     val hasApiKey: Boolean = false,
     val canScheduleExactAlarms: Boolean = true,
+    val batteryOptimizationExempt: Boolean = true,
+    val notificationsEnabled: Boolean = true,
+    val schedulingStatus: SchedulingStatus = SchedulingStatus(),
     val nextPrayer: Prayer? = null,
     val nextPrayerTime: ZonedDateTime? = null,
     val nextPrayerIsTomorrow: Boolean = false,
     val todayTimes: List<Pair<Prayer, ZonedDateTime>> = emptyList(),
     val enabledPrayers: Set<Prayer> = emptySet()
-)
+) {
+    val allDiagnosticsOk: Boolean
+        get() = canScheduleExactAlarms && batteryOptimizationExempt && notificationsEnabled
+}
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
@@ -44,7 +55,8 @@ class HomeViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val alarmScheduler: AlarmScheduler,
     private val timesResolver: PrayerTimesResolver,
-    private val secureKeyStore: SecureKeyStore
+    private val secureKeyStore: SecureKeyStore,
+    private val schedulingStatusStore: SchedulingStatusStore
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -52,25 +64,48 @@ class HomeViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            combine(settingsRepository.settingsFlow, secureKeyStore.geminiApiKey) { settings, apiKey -> settings to apiKey }
-                .collect { (settings, apiKey) -> applySettings(settings, apiKey.isNotBlank()) }
+            combine(
+                settingsRepository.settingsFlow,
+                secureKeyStore.geminiApiKey,
+                schedulingStatusStore.statusFlow
+            ) { settings, apiKey, status -> Triple(settings, apiKey, status) }
+                .collect { (settings, apiKey, status) -> applySettings(settings, apiKey.isNotBlank(), status) }
         }
     }
 
     fun refreshNow() {
         viewModelScope.launch {
             val settings = settingsRepository.settingsFlow.first()
-            applySettings(settings, secureKeyStore.hasGeminiApiKey())
+            val status = schedulingStatusStore.statusFlow.first()
+            applySettings(settings, secureKeyStore.hasGeminiApiKey(), status)
         }
     }
 
-    private suspend fun applySettings(settings: PrayerSettings, hasApiKey: Boolean) {
+    private fun isBatteryOptimizationExempt(): Boolean {
+        val pm = context.getSystemService(PowerManager::class.java) ?: return true
+        return pm.isIgnoringBatteryOptimizations(context.packageName)
+    }
+
+    private fun areNotificationsEnabled(): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val granted = ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+            if (!granted) return false
+        }
+        val manager = context.getSystemService(NotificationManager::class.java) ?: return true
+        return manager.areNotificationsEnabled()
+    }
+
+    private suspend fun applySettings(settings: PrayerSettings, hasApiKey: Boolean, status: SchedulingStatus) {
         if (!settings.hasLocation) {
             _uiState.value = HomeUiState(
                 loading = false,
                 hasLocation = false,
                 hasApiKey = hasApiKey,
                 canScheduleExactAlarms = alarmScheduler.canScheduleExactAlarms(),
+                batteryOptimizationExempt = isBatteryOptimizationExempt(),
+                notificationsEnabled = areNotificationsEnabled(),
+                schedulingStatus = status,
                 enabledPrayers = settings.enabledPrayers
             )
             return
@@ -98,6 +133,9 @@ class HomeViewModel @Inject constructor(
             sourceLabel = settings.prayerTimeSource.displayName,
             hasApiKey = hasApiKey,
             canScheduleExactAlarms = alarmScheduler.canScheduleExactAlarms(),
+            batteryOptimizationExempt = isBatteryOptimizationExempt(),
+            notificationsEnabled = areNotificationsEnabled(),
+            schedulingStatus = status,
             nextPrayer = next.first,
             nextPrayerTime = next.second,
             nextPrayerIsTomorrow = nextIsTomorrow,

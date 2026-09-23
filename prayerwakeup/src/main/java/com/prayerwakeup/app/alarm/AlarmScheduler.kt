@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import com.prayerwakeup.app.data.PrayerTimesResolver
+import com.prayerwakeup.app.data.settings.SchedulingStatusStore
 import com.prayerwakeup.app.data.settings.SettingsRepository
 import com.prayerwakeup.app.domain.Prayer
 import com.prayerwakeup.app.domain.PrayerTimeCalculator
@@ -21,7 +22,8 @@ class AlarmScheduler @Inject constructor(
     @ApplicationContext private val context: Context,
     private val settingsRepository: SettingsRepository,
     private val calculator: PrayerTimeCalculator,
-    private val timesResolver: PrayerTimesResolver
+    private val timesResolver: PrayerTimesResolver,
+    private val schedulingStatusStore: SchedulingStatusStore
 ) {
     private val alarmManager: AlarmManager?
         get() = context.getSystemService(AlarmManager::class.java)
@@ -54,6 +56,8 @@ class AlarmScheduler @Inject constructor(
         // Recompute again shortly after local midnight so times stay correct day to day.
         val refreshTarget = today.plusDays(1).atStartOfDay(zoneId).plusMinutes(2)
         scheduleExact(REFRESH_REQUEST_CODE, refreshTarget, buildRefreshIntent())
+
+        schedulingStatusStore.recordSuccess(settings.enabledPrayers.size)
     }
 
     fun cancelPrayer(prayer: Prayer) {

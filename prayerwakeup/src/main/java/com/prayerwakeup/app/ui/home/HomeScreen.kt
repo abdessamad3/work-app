@@ -16,6 +16,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Brightness4
 import androidx.compose.material.icons.filled.Brightness5
+import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.NightsStay
 import androidx.compose.material.icons.filled.PhoneInTalk
@@ -119,6 +121,9 @@ fun HomeScreen(onOpenSettings: () -> Unit, viewModel: HomeViewModel = hiltViewMo
             }
 
             LocationBadge(locationLabel = state.locationLabel, sourceLabel = state.sourceLabel, onClick = onOpenSettings)
+            Spacer(Modifier.height(12.dp))
+
+            StatusCard(state = state, now = now, onClick = onOpenSettings)
             Spacer(Modifier.height(12.dp))
 
             if (!state.canScheduleExactAlarms) {
@@ -228,6 +233,58 @@ private fun LocationBadge(locationLabel: String, sourceLabel: String, onClick: (
             }
         }
     }
+}
+
+@Composable
+private fun StatusCard(state: HomeUiState, now: ZonedDateTime, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = MaterialTheme.shapes.medium,
+        color = if (state.allDiagnosticsOk) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.errorContainer
+    ) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp)) {
+            Row {
+                StatusChip(ok = state.canScheduleExactAlarms, label = "التنبيهات الدقيقة")
+                Spacer(Modifier.width(14.dp))
+                StatusChip(ok = state.batteryOptimizationExempt, label = "البطارية")
+                Spacer(Modifier.width(14.dp))
+                StatusChip(ok = state.notificationsEnabled, label = "الإشعارات")
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                schedulingSummary(state.schedulingStatus, now),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun StatusChip(ok: Boolean, label: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            if (ok) Icons.Filled.CheckCircle else Icons.Filled.Cancel,
+            contentDescription = null,
+            tint = if (ok) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(Modifier.width(4.dp))
+        Text(label, style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+private fun schedulingSummary(status: com.prayerwakeup.app.data.settings.SchedulingStatus, now: ZonedDateTime): String {
+    if (status.lastScheduledAtEpochMillis <= 0L) return "لم تتم جدولة أي تنبيه بعد"
+    val scheduledAt = java.time.Instant.ofEpochMilli(status.lastScheduledAtEpochMillis).atZone(now.zone)
+    val minutes = Duration.between(scheduledAt, now).toMinutes().coerceAtLeast(0)
+    val relative = when {
+        minutes < 1 -> "الآن"
+        minutes < 60 -> "قبل $minutes د"
+        minutes < 60 * 24 -> "قبل ${minutes / 60} س"
+        else -> "قبل ${minutes / (60 * 24)} يوم"
+    }
+    return "آخر جدولة ناجحة: $relative · ${status.scheduledCount} صلاة مجدولة"
 }
 
 @Composable
