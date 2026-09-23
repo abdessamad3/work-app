@@ -19,8 +19,10 @@ import androidx.compose.material.icons.filled.Brightness5
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.NightsStay
 import androidx.compose.material.icons.filled.PhoneInTalk
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material.icons.filled.WbTwilight
@@ -63,7 +65,7 @@ import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(onOpenSettings: () -> Unit, viewModel: HomeViewModel = hiltViewModel()) {
+fun HomeScreen(onOpenSettings: () -> Unit, onOpenStatistics: () -> Unit, viewModel: HomeViewModel = hiltViewModel()) {
     val state by viewModel.uiState.collectAsState()
     val timeFormatter = remember { DateTimeFormatter.ofPattern("hh:mm a") }
 
@@ -92,6 +94,9 @@ fun HomeScreen(onOpenSettings: () -> Unit, viewModel: HomeViewModel = hiltViewMo
             TopAppBar(
                 title = { Text("صلاتي") },
                 actions = {
+                    IconButton(onClick = onOpenStatistics) {
+                        Icon(Icons.Filled.BarChart, contentDescription = "الإحصائيات")
+                    }
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Filled.Settings, contentDescription = "الإعدادات")
                     }
@@ -192,7 +197,16 @@ fun HomeScreen(onOpenSettings: () -> Unit, viewModel: HomeViewModel = hiltViewMo
                     val enabled = state.enabledPrayers.contains(prayer)
                     val isNext = !state.nextPrayerIsTomorrow && prayer == state.nextPrayer
                     val isPast = time.isBefore(now)
-                    PrayerRow(prayer = prayer, time = time.format(timeFormatter), enabled = enabled, isNext = isNext, isPast = isPast)
+                    val prayed = state.prayedToday.contains(prayer)
+                    PrayerRow(
+                        prayer = prayer,
+                        time = time.format(timeFormatter),
+                        enabled = enabled,
+                        isNext = isNext,
+                        isPast = isPast,
+                        prayed = prayed,
+                        onTogglePrayed = { viewModel.togglePrayed(prayer, prayed) }
+                    )
                 }
             }
         }
@@ -288,7 +302,15 @@ private fun schedulingSummary(status: com.prayerwakeup.app.data.settings.Schedul
 }
 
 @Composable
-private fun PrayerRow(prayer: Prayer, time: String, enabled: Boolean, isNext: Boolean, isPast: Boolean) {
+private fun PrayerRow(
+    prayer: Prayer,
+    time: String,
+    enabled: Boolean,
+    isNext: Boolean,
+    isPast: Boolean,
+    prayed: Boolean,
+    onTogglePrayed: () -> Unit
+) {
     val contentColor = when {
         isNext -> MaterialTheme.colorScheme.primary
         isPast -> MaterialTheme.colorScheme.outline
@@ -300,7 +322,7 @@ private fun PrayerRow(prayer: Prayer, time: String, enabled: Boolean, isNext: Bo
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -324,6 +346,15 @@ private fun PrayerRow(prayer: Prayer, time: String, enabled: Boolean, isNext: Bo
                     color = contentColor,
                     fontWeight = if (isNext) FontWeight.Bold else FontWeight.Normal
                 )
+                Spacer(Modifier.width(4.dp))
+                IconButton(onClick = onTogglePrayed, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        if (prayed) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+                        contentDescription = if (prayed) "تمت الصلاة، اضغط للإلغاء" else "لم تُسجَّل بعد، اضغط لتسجيل الصلاة",
+                        tint = if (prayed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
         }
     }

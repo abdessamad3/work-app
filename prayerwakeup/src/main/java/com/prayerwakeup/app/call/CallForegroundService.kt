@@ -9,6 +9,7 @@ import com.prayerwakeup.app.PrayerWakeupApp
 import com.prayerwakeup.app.conversation.CallEvent
 import com.prayerwakeup.app.conversation.ConversationManager
 import com.prayerwakeup.app.data.settings.SettingsRepository
+import com.prayerwakeup.app.data.tracking.PrayerLogRepository
 import com.prayerwakeup.app.domain.Prayer
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -19,6 +20,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
@@ -29,6 +31,7 @@ class CallForegroundService : Service() {
     @Inject lateinit var ringtonePlayer: RingtonePlayer
     @Inject lateinit var conversationManager: ConversationManager
     @Inject lateinit var settingsRepository: SettingsRepository
+    @Inject lateinit var prayerLogRepository: PrayerLogRepository
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var actionsJob: Job? = null
@@ -108,6 +111,10 @@ class CallForegroundService : Service() {
             }
         }
 
+        // Logged here (covering both a full conversation and an early hang-up via Decline while
+        // InCall) rather than in handleDecline, so a mid-call decline is recorded as "answered"
+        // once — they did pick up — instead of racing two writes for the same call.
+        prayerLogRepository.logCallOutcome(LocalDate.now(), prayer, answered = true)
         delay(1500)
         finishCall()
     }
@@ -117,7 +124,12 @@ class CallForegroundService : Service() {
         ringtonePlayer.stop()
         conversationManager.stop()
         when (val state = sessionController.uiState.value) {
-            is CallUiState.Ringing -> sessionController.endCall(state.prayer)
+            is CallUiState.Ringing -> {
+                sessionController.endCall(state.prayer)
+                serviceScope.launch {
+                    prayerLogRepository.logCallOutcome(LocalDate.now(), state.prayer, answered = false)
+                }
+            }
             is CallUiState.InCall -> sessionController.endCall(state.prayer)
             else -> Unit
         }

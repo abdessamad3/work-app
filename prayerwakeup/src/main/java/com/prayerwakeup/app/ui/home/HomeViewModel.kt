@@ -16,6 +16,8 @@ import com.prayerwakeup.app.data.settings.SchedulingStatus
 import com.prayerwakeup.app.data.settings.SchedulingStatusStore
 import com.prayerwakeup.app.data.settings.SecureKeyStore
 import com.prayerwakeup.app.data.settings.SettingsRepository
+import com.prayerwakeup.app.data.tracking.PrayerLogEntry
+import com.prayerwakeup.app.data.tracking.PrayerLogRepository
 import com.prayerwakeup.app.domain.Prayer
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -25,6 +27,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import javax.inject.Inject
@@ -43,11 +46,14 @@ data class HomeUiState(
     val nextPrayerTime: ZonedDateTime? = null,
     val nextPrayerIsTomorrow: Boolean = false,
     val todayTimes: List<Pair<Prayer, ZonedDateTime>> = emptyList(),
-    val enabledPrayers: Set<Prayer> = emptySet()
+    val enabledPrayers: Set<Prayer> = emptySet(),
+    val prayedToday: Set<Prayer> = emptySet()
 ) {
     val allDiagnosticsOk: Boolean
         get() = canScheduleExactAlarms && batteryOptimizationExempt && notificationsEnabled
 }
+
+private data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
@@ -56,7 +62,8 @@ class HomeViewModel @Inject constructor(
     private val alarmScheduler: AlarmScheduler,
     private val timesResolver: PrayerTimesResolver,
     private val secureKeyStore: SecureKeyStore,
-    private val schedulingStatusStore: SchedulingStatusStore
+    private val schedulingStatusStore: SchedulingStatusStore,
+    private val prayerLogRepository: PrayerLogRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -67,9 +74,12 @@ class HomeViewModel @Inject constructor(
             combine(
                 settingsRepository.settingsFlow,
                 secureKeyStore.geminiApiKey,
-                schedulingStatusStore.statusFlow
-            ) { settings, apiKey, status -> Triple(settings, apiKey, status) }
-                .collect { (settings, apiKey, status) -> applySettings(settings, apiKey.isNotBlank(), status) }
+                schedulingStatusStore.statusFlow,
+                prayerLogRepository.entriesFlow
+            ) { settings, apiKey, status, entries -> Quadruple(settings, apiKey, status, entries) }
+                .collect { (settings, apiKey, status, entries) ->
+                    applySettings(settings, apiKey.isNotBlank(), status, prayedTodaySet(entries))
+                }
         }
     }
 
@@ -77,7 +87,19 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             val settings = settingsRepository.settingsFlow.first()
             val status = schedulingStatusStore.statusFlow.first()
-            applySettings(settings, secureKeyStore.hasGeminiApiKey(), status)
+            val entries = prayerLogRepository.entriesFlow.first()
+            applySettings(settings, secureKeyStore.hasGeminiApiKey(), status, prayedTodaySet(entries))
+        }
+    }
+
+    private fun prayedTodaySet(entries: List<PrayerLogEntry>): Set<Prayer> {
+        val today = LocalDate.now()
+        return entries.filter { it.date == today && it.prayed }.map { it.prayer }.toSet()
+    }
+
+    fun togglePrayed(prayer: Prayer, currentlyPrayed: Boolean) {
+        viewModelScope.launch {
+            prayerLogRepository.setPrayed(LocalDate.now(), prayer, !currentlyPrayed)
         }
     }
 
@@ -96,7 +118,7 @@ class HomeViewModel @Inject constructor(
         return manager.areNotificationsEnabled()
     }
 
-    private suspend fun applySettings(settings: PrayerSettings, hasApiKey: Boolean, status: SchedulingStatus) {
+    private suspend fun applySettings(settings: PrayerSettings, hasApiKey: Boolean, status: SchedulingStatus, prayedToday: Set<Prayer>) {
         if (!settings.hasLocation) {
             _uiState.value = HomeUiState(
                 loading = false,
@@ -106,7 +128,8 @@ class HomeViewModel @Inject constructor(
                 batteryOptimizationExempt = isBatteryOptimizationExempt(),
                 notificationsEnabled = areNotificationsEnabled(),
                 schedulingStatus = status,
-                enabledPrayers = settings.enabledPrayers
+                enabledPrayers = settings.enabledPrayers,
+                prayedToday = prayedToday
             )
             return
         }
@@ -140,7 +163,8 @@ class HomeViewModel @Inject constructor(
             nextPrayerTime = next.second,
             nextPrayerIsTomorrow = nextIsTomorrow,
             todayTimes = ordered,
-            enabledPrayers = settings.enabledPrayers
+            enabledPrayers = settings.enabledPrayers,
+            prayedToday = prayedToday
         )
     }
 
