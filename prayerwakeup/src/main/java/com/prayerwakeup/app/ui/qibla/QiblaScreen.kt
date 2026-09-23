@@ -31,7 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.graphicsLayer
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -98,7 +98,7 @@ fun QiblaScreen(onBack: () -> Unit, viewModel: QiblaViewModel = hiltViewModel())
                 contentDescription = "سهم اتجاه القبلة",
                 modifier = Modifier
                     .size(160.dp)
-                    .graphicsLayer { rotationZ = relativeAngle },
+                    .rotate(relativeAngle),
                 tint = MaterialTheme.colorScheme.primary
             )
             Spacer(Modifier.height(24.dp))
