@@ -3,6 +3,7 @@ package com.prayerwakeup.app.ui.home
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -113,15 +114,15 @@ fun HomeScreen(
             )
         }
     ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
-            if (state.loading) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-                return@Column
+        if (state.loading) {
+            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
             }
+            return@Scaffold
+        }
 
-            if (!state.hasLocation) {
+        if (!state.hasLocation) {
+            Column(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp)) {
                         Text("لم يتم تحديد موقعك بعد", style = MaterialTheme.typography.titleMedium)
@@ -131,125 +132,134 @@ fun HomeScreen(
                         Button(onClick = onOpenSettings) { Text("فتح الإعدادات") }
                     }
                 }
-                return@Column
             }
+            return@Scaffold
+        }
 
-            LocationBadge(locationLabel = state.locationLabel, sourceLabel = state.sourceLabel, onClick = onOpenSettings)
-            Spacer(Modifier.height(8.dp))
+        // A single LazyColumn (rather than a fixed Column wrapping a nested LazyColumn) so the
+        // whole screen scrolls together instead of the prayer-times list being clipped once the
+        // cards above it fill the viewport.
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(padding),
+            contentPadding = PaddingValues(16.dp)
+        ) {
+            item {
+                LocationBadge(locationLabel = state.locationLabel, sourceLabel = state.sourceLabel, onClick = onOpenSettings)
+                Spacer(Modifier.height(8.dp))
 
-            if (state.hijriLabel.isNotBlank()) {
-                Text(
-                    state.hijriLabel,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.outline
-                )
-                Spacer(Modifier.height(4.dp))
-            }
-            if (state.isRamadan) {
-                Text(
-                    "رمضان مبارك",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                if (state.hijriLabel.isNotBlank()) {
+                    Text(
+                        state.hijriLabel,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                    Spacer(Modifier.height(4.dp))
+                }
+                if (state.isRamadan) {
+                    Text(
+                        "رمضان مبارك",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+
+                StatusCard(state = state, now = now, onClick = onOpenSettings)
+                Spacer(Modifier.height(12.dp))
+
+                if (state.dailyAthkar.isNotBlank()) {
+                    Surface(
+                        shape = MaterialTheme.shapes.medium,
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            state.dailyAthkar,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.fillMaxWidth().padding(14.dp)
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
+                }
+
+                if (!state.canScheduleExactAlarms) {
+                    WarningCard(
+                        message = "التطبيق يحتاج إذن \"التنبيهات الدقيقة\" ليتصل بك في وقت الصلاة بالضبط.",
+                        actionLabel = "فتح الإعدادات",
+                        onAction = onOpenSettings
+                    )
+                    Spacer(Modifier.height(12.dp))
+                }
+
+                if (!state.hasApiKey) {
+                    WarningCard(
+                        message = "لم تُضف مفتاح API بعد، لذا ستستخدم المكالمات جملاً ثابتة بدلاً من محادثة ذكية حقيقية.",
+                        actionLabel = "إضافة المفتاح",
+                        onAction = onOpenSettings
+                    )
+                    Spacer(Modifier.height(12.dp))
+                }
+
+                state.nextPrayer?.let { prayer ->
+                    val time = state.nextPrayerTime
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                    ) {
+                        Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                if (state.nextPrayerIsTomorrow) "الصلاة القادمة (غداً)" else "الصلاة القادمة",
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Icon(
+                                prayer.icon(),
+                                contentDescription = null,
+                                modifier = Modifier.size(36.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(prayer.arabicName, style = MaterialTheme.typography.headlineMedium)
+                            if (time != null) {
+                                Spacer(Modifier.height(4.dp))
+                                Text(time.format(timeFormatter), style = MaterialTheme.typography.titleLarge)
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    remainingLabel(now, time),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                                )
+                            }
+                            Spacer(Modifier.height(12.dp))
+                            TextButton(onClick = { viewModel.testCallNow(prayer) }) {
+                                Icon(Icons.Filled.PhoneInTalk, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("اختبار المكالمة الآن")
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(20.dp))
+                }
+
+                Text("مواقيت اليوم", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(8.dp))
             }
 
-            StatusCard(state = state, now = now, onClick = onOpenSettings)
-            Spacer(Modifier.height(12.dp))
-
-            if (state.dailyAthkar.isNotBlank()) {
-                Surface(
-                    shape = MaterialTheme.shapes.medium,
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        state.dailyAthkar,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.fillMaxWidth().padding(14.dp)
-                    )
-                }
-                Spacer(Modifier.height(12.dp))
-            }
-
-            if (!state.canScheduleExactAlarms) {
-                WarningCard(
-                    message = "التطبيق يحتاج إذن \"التنبيهات الدقيقة\" ليتصل بك في وقت الصلاة بالضبط.",
-                    actionLabel = "فتح الإعدادات",
-                    onAction = onOpenSettings
+            items(state.todayTimes) { (prayer, time) ->
+                val enabled = state.enabledPrayers.contains(prayer)
+                val isNext = !state.nextPrayerIsTomorrow && prayer == state.nextPrayer
+                val isPast = time.isBefore(now)
+                val prayed = state.prayedToday.contains(prayer)
+                PrayerRow(
+                    prayer = prayer,
+                    time = time.format(timeFormatter),
+                    enabled = enabled,
+                    isNext = isNext,
+                    isPast = isPast,
+                    prayed = prayed,
+                    onTogglePrayed = { viewModel.togglePrayed(prayer, prayed) }
                 )
-                Spacer(Modifier.height(12.dp))
-            }
-
-            if (!state.hasApiKey) {
-                WarningCard(
-                    message = "لم تُضف مفتاح API بعد، لذا ستستخدم المكالمات جملاً ثابتة بدلاً من محادثة ذكية حقيقية.",
-                    actionLabel = "إضافة المفتاح",
-                    onAction = onOpenSettings
-                )
-                Spacer(Modifier.height(12.dp))
-            }
-
-            state.nextPrayer?.let { prayer ->
-                val time = state.nextPrayerTime
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-                ) {
-                    Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            if (state.nextPrayerIsTomorrow) "الصلاة القادمة (غداً)" else "الصلاة القادمة",
-                            style = MaterialTheme.typography.labelLarge
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Icon(
-                            prayer.icon(),
-                            contentDescription = null,
-                            modifier = Modifier.size(36.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(prayer.arabicName, style = MaterialTheme.typography.headlineMedium)
-                        if (time != null) {
-                            Spacer(Modifier.height(4.dp))
-                            Text(time.format(timeFormatter), style = MaterialTheme.typography.titleLarge)
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                remainingLabel(now, time),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                            )
-                        }
-                        Spacer(Modifier.height(12.dp))
-                        TextButton(onClick = { viewModel.testCallNow(prayer) }) {
-                            Icon(Icons.Filled.PhoneInTalk, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text("اختبار المكالمة الآن")
-                        }
-                    }
-                }
-                Spacer(Modifier.height(20.dp))
-            }
-
-            Text("مواقيت اليوم", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(8.dp))
-            LazyColumn {
-                items(state.todayTimes) { (prayer, time) ->
-                    val enabled = state.enabledPrayers.contains(prayer)
-                    val isNext = !state.nextPrayerIsTomorrow && prayer == state.nextPrayer
-                    val isPast = time.isBefore(now)
-                    val prayed = state.prayedToday.contains(prayer)
-                    PrayerRow(
-                        prayer = prayer,
-                        time = time.format(timeFormatter),
-                        enabled = enabled,
-                        isNext = isNext,
-                        isPast = isPast,
-                        prayed = prayed,
-                        onTogglePrayed = { viewModel.togglePrayed(prayer, prayed) }
-                    )
-                }
             }
         }
     }
