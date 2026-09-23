@@ -7,8 +7,12 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.lifecycle.lifecycleScope
 import com.prayerwakeup.app.alarm.AlarmScheduler
+import com.prayerwakeup.app.data.settings.PrayerSettings
+import com.prayerwakeup.app.data.settings.SettingsRepository
 import com.prayerwakeup.app.ui.navigation.PrayerWakeupNavGraph
 import com.prayerwakeup.app.ui.theme.PrayerWakeupTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -19,6 +23,7 @@ import javax.inject.Inject
 class MainActivity : ComponentActivity() {
 
     @Inject lateinit var alarmScheduler: AlarmScheduler
+    @Inject lateinit var settingsRepository: SettingsRepository
 
     private val requestPermissions = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -29,7 +34,8 @@ class MainActivity : ComponentActivity() {
         requestStartupPermissions()
 
         setContent {
-            PrayerWakeupTheme {
+            val settings by settingsRepository.settingsFlow.collectAsState(initial = PrayerSettings())
+            PrayerWakeupTheme(appTheme = settings.appTheme) {
                 PrayerWakeupNavGraph()
             }
         }

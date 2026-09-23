@@ -4,18 +4,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
-
-private val Primary = Color(0xFF0B3D2E)
-private val Secondary = Color(0xFFF2C94C)
-
-private val LightColors = lightColorScheme(primary = Primary, secondary = Secondary)
-private val DarkColors = darkColorScheme(primary = Secondary, secondary = Primary)
+import com.prayerwakeup.app.domain.AppTheme
 
 @Composable
-fun PrayerWakeupTheme(darkTheme: Boolean = false, content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = if (darkTheme) DarkColors else LightColors,
-        content = content
-    )
+fun PrayerWakeupTheme(appTheme: AppTheme = AppTheme.CLASSIC_GREEN, darkTheme: Boolean = false, content: @Composable () -> Unit) {
+    val palette = paletteFor(appTheme)
+    val colors = if (darkTheme) {
+        darkColorScheme(primary = palette.secondary, secondary = palette.primary)
+    } else {
+        lightColorScheme(primary = palette.primary, secondary = palette.secondary)
+    }
+    MaterialTheme(colorScheme = colors, content = content)
 }

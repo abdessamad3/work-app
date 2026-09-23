@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.prayerwakeup.app.domain.AppTheme
 import com.prayerwakeup.app.domain.CalculationMethod
 import com.prayerwakeup.app.domain.CallerPersona
 import com.prayerwakeup.app.domain.Madhab
@@ -47,6 +48,7 @@ class SettingsRepository @Inject constructor(
         val MAWAQIT_MOSQUE_ID = stringPreferencesKey("mawaqit_mosque_id")
         val MAWAQIT_MOSQUE_LABEL = stringPreferencesKey("mawaqit_mosque_label")
         val WAKE_CHALLENGE = stringPreferencesKey("wake_challenge")
+        val APP_THEME = stringPreferencesKey("app_theme")
     }
 
     val settingsFlow: Flow<PrayerSettings> = context.settingsDataStore.data.map { prefs ->
@@ -78,7 +80,8 @@ class SettingsRepository @Inject constructor(
             mawaqitMosqueId = prefs[Keys.MAWAQIT_MOSQUE_ID] ?: defaults.mawaqitMosqueId,
             mawaqitMosqueLabel = prefs[Keys.MAWAQIT_MOSQUE_LABEL] ?: defaults.mawaqitMosqueLabel,
             wakeChallenge = prefs[Keys.WAKE_CHALLENGE]?.let { runCatching { WakeChallenge.valueOf(it) }.getOrNull() }
-                ?: defaults.wakeChallenge
+                ?: defaults.wakeChallenge,
+            appTheme = prefs[Keys.APP_THEME]?.let { runCatching { AppTheme.valueOf(it) }.getOrNull() } ?: defaults.appTheme
         )
     }
 
@@ -147,5 +150,9 @@ class SettingsRepository @Inject constructor(
 
     suspend fun updateWakeChallenge(challenge: WakeChallenge) {
         context.settingsDataStore.edit { it[Keys.WAKE_CHALLENGE] = challenge.name }
+    }
+
+    suspend fun updateAppTheme(theme: AppTheme) {
+        context.settingsDataStore.edit { it[Keys.APP_THEME] = theme.name }
     }
 }

@@ -1,5 +1,6 @@
 package com.prayerwakeup.app.data.settings
 
+import com.prayerwakeup.app.domain.AppTheme
 import com.prayerwakeup.app.domain.CalculationMethod
 import com.prayerwakeup.app.domain.CallerPersona
 import com.prayerwakeup.app.domain.Madhab
@@ -27,5 +28,6 @@ data class PrayerSettings(
     val elevenLabsVoiceLabel: String = "",
     val mawaqitMosqueId: String = "",
     val mawaqitMosqueLabel: String = "",
-    val wakeChallenge: WakeChallenge = WakeChallenge.NONE
+    val wakeChallenge: WakeChallenge = WakeChallenge.NONE,
+    val appTheme: AppTheme = AppTheme.CLASSIC_GREEN
 )

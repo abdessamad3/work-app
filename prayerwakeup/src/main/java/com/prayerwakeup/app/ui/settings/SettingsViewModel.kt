@@ -16,6 +16,7 @@ import com.prayerwakeup.app.data.remote.MoroccoHabousClient
 import com.prayerwakeup.app.data.settings.PrayerSettings
 import com.prayerwakeup.app.data.settings.SecureKeyStore
 import com.prayerwakeup.app.data.settings.SettingsRepository
+import com.prayerwakeup.app.domain.AppTheme
 import com.prayerwakeup.app.domain.CalculationMethod
 import com.prayerwakeup.app.domain.CallerPersona
 import com.prayerwakeup.app.domain.Madhab
@@ -211,6 +212,10 @@ class SettingsViewModel @Inject constructor(
 
     fun setWakeChallenge(challenge: WakeChallenge) {
         viewModelScope.launch { settingsRepository.updateWakeChallenge(challenge) }
+    }
+
+    fun setAppTheme(theme: AppTheme) {
+        viewModelScope.launch { settingsRepository.updateAppTheme(theme) }
     }
 
     fun saveGeminiApiKey(key: String) {

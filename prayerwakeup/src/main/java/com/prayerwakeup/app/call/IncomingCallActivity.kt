@@ -61,6 +61,7 @@ import com.prayerwakeup.app.data.settings.PrayerSettings
 import com.prayerwakeup.app.data.settings.SettingsRepository
 import com.prayerwakeup.app.domain.Prayer
 import com.prayerwakeup.app.domain.WakeChallenge
+import com.prayerwakeup.app.ui.theme.paletteFor
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.delay
 import javax.inject.Inject
@@ -91,11 +92,13 @@ class IncomingCallActivity : ComponentActivity() {
             MaterialTheme {
                 val state by sessionController.uiState.collectAsState()
                 val settings by settingsRepository.settingsFlow.collectAsState(initial = PrayerSettings())
+                val backgroundColor = paletteFor(settings.appTheme).primary
                 var showChallenge by remember { mutableStateOf(false) }
 
                 if (showChallenge) {
                     WakeChallengeScreen(
                         challenge = settings.wakeChallenge,
+                        backgroundColor = backgroundColor,
                         onCompleted = {
                             sessionController.requestDecline()
                             finish()
@@ -105,6 +108,7 @@ class IncomingCallActivity : ComponentActivity() {
                 } else {
                     CallScreen(
                         state = state,
+                        backgroundColor = backgroundColor,
                         onAnswer = { sessionController.requestAnswer() },
                         onDecline = {
                             // A configured challenge means a bare decline is never accepted on
@@ -141,13 +145,13 @@ class IncomingCallActivity : ComponentActivity() {
 }
 
 @Composable
-private fun CallScreen(state: CallUiState, onAnswer: () -> Unit, onDecline: () -> Unit) {
-    Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF0B3D2E)) {
+private fun CallScreen(state: CallUiState, backgroundColor: Color, onAnswer: () -> Unit, onDecline: () -> Unit) {
+    Surface(modifier = Modifier.fillMaxSize(), color = backgroundColor) {
         when (state) {
             is CallUiState.Idle -> Box(Modifier.fillMaxSize())
             is CallUiState.Ringing -> RingingContent(state.prayer, onAnswer, onDecline)
             is CallUiState.InCall -> InCallContent(state, onDecline)
-            is CallUiState.Ended -> EndedContent(state.prayer)
+            is CallUiState.Ended -> EndedContent(state.prayer, backgroundColor)
         }
     }
 }
@@ -272,9 +276,9 @@ private fun InCallContent(state: CallUiState.InCall, onDecline: () -> Unit) {
 }
 
 @Composable
-private fun EndedContent(prayer: Prayer) {
+private fun EndedContent(prayer: Prayer, backgroundColor: Color) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp).background(Color(0xFF0B3D2E)),
+        modifier = Modifier.fillMaxSize().padding(24.dp).background(backgroundColor),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -291,18 +295,28 @@ private const val TARGET_STEPS = 20
 private const val QURAN_MIN_SECONDS = 90
 
 @Composable
-private fun WakeChallengeScreen(challenge: WakeChallenge, onCompleted: () -> Unit, onCancel: () -> Unit) {
+private fun WakeChallengeScreen(
+    challenge: WakeChallenge,
+    backgroundColor: Color,
+    onCompleted: () -> Unit,
+    onCancel: () -> Unit
+) {
     when (challenge) {
         WakeChallenge.NONE -> LaunchedEffect(Unit) { onCompleted() }
-        WakeChallenge.STEPS -> StepsChallengeContent(onCompleted, onCancel)
-        WakeChallenge.MATH -> MathChallengeContent(onCompleted, onCancel)
-        WakeChallenge.QURAN -> QuranChallengeContent(onCompleted, onCancel)
+        WakeChallenge.STEPS -> StepsChallengeContent(backgroundColor, onCompleted, onCancel)
+        WakeChallenge.MATH -> MathChallengeContent(backgroundColor, onCompleted, onCancel)
+        WakeChallenge.QURAN -> QuranChallengeContent(backgroundColor, onCompleted, onCancel)
     }
 }
 
 @Composable
-private fun ChallengeScaffold(title: String, onCancel: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
-    Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF0B3D2E)) {
+private fun ChallengeScaffold(
+    title: String,
+    backgroundColor: Color,
+    onCancel: () -> Unit,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Surface(modifier = Modifier.fillMaxSize(), color = backgroundColor) {
         Column(
             modifier = Modifier.fillMaxSize().padding(32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -318,7 +332,7 @@ private fun ChallengeScaffold(title: String, onCancel: () -> Unit, content: @Com
 }
 
 @Composable
-private fun StepsChallengeContent(onCompleted: () -> Unit, onCancel: () -> Unit) {
+private fun StepsChallengeContent(backgroundColor: Color, onCompleted: () -> Unit, onCancel: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var steps by remember { mutableStateOf(0) }
     var sensorAvailable by remember { mutableStateOf(true) }
@@ -341,7 +355,7 @@ private fun StepsChallengeContent(onCompleted: () -> Unit, onCancel: () -> Unit)
         onDispose { sensorManager.unregisterListener(listener) }
     }
 
-    ChallengeScaffold(title = "امشِ 20 خطوة لإيقاف المنبه", onCancel = onCancel) {
+    ChallengeScaffold(title = "امشِ 20 خطوة لإيقاف المنبه", backgroundColor = backgroundColor, onCancel = onCancel) {
         if (!sensorAvailable) {
             Text("مستشعر الخطوات غير متوفر على هذا الجهاز.", color = Color.White, textAlign = TextAlign.Center)
             Spacer(Modifier.height(16.dp))
@@ -370,12 +384,12 @@ private fun generateMathProblem(): MathProblem {
 }
 
 @Composable
-private fun MathChallengeContent(onCompleted: () -> Unit, onCancel: () -> Unit) {
+private fun MathChallengeContent(backgroundColor: Color, onCompleted: () -> Unit, onCancel: () -> Unit) {
     var problem by remember { mutableStateOf(generateMathProblem()) }
     var answer by remember(problem) { mutableStateOf("") }
     var wrongAttempt by remember(problem) { mutableStateOf(false) }
 
-    ChallengeScaffold(title = "حل العملية الحسابية لإيقاف المنبه", onCancel = onCancel) {
+    ChallengeScaffold(title = "حل العملية الحسابية لإيقاف المنبه", backgroundColor = backgroundColor, onCancel = onCancel) {
         Text(problem.displayText, fontSize = 36.sp, color = Color.White, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(20.dp))
         OutlinedTextField(
@@ -408,7 +422,7 @@ private fun MathChallengeContent(onCompleted: () -> Unit, onCancel: () -> Unit) 
 }
 
 @Composable
-private fun QuranChallengeContent(onCompleted: () -> Unit, onCancel: () -> Unit) {
+private fun QuranChallengeContent(backgroundColor: Color, onCompleted: () -> Unit, onCancel: () -> Unit) {
     var remaining by remember { mutableStateOf(QURAN_MIN_SECONDS) }
     LaunchedEffect(Unit) {
         while (remaining > 0) {
@@ -417,7 +431,7 @@ private fun QuranChallengeContent(onCompleted: () -> Unit, onCancel: () -> Unit)
         }
     }
 
-    ChallengeScaffold(title = "اتلُ 10 آيات من سورة البقرة لإيقاف المنبه", onCancel = onCancel) {
+    ChallengeScaffold(title = "اتلُ 10 آيات من سورة البقرة لإيقاف المنبه", backgroundColor = backgroundColor, onCancel = onCancel) {
         Text(
             "اتلُ عشر آيات من أول سورة البقرة (الآيات 1 إلى 10) من حفظك أو من مصحفك، ثم اضغط الزر أدناه بعد الانتهاء.",
             color = Color.White,

@@ -5,15 +5,19 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -22,6 +26,7 @@ import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Security
@@ -54,12 +59,14 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.prayerwakeup.app.data.remote.MawaqitTimes
+import com.prayerwakeup.app.domain.AppTheme
 import com.prayerwakeup.app.domain.CalculationMethod
 import com.prayerwakeup.app.domain.CallerPersona
 import com.prayerwakeup.app.domain.Madhab
 import com.prayerwakeup.app.domain.Prayer
 import com.prayerwakeup.app.domain.PrayerTimeSource
 import com.prayerwakeup.app.domain.WakeChallenge
+import com.prayerwakeup.app.ui.theme.paletteFor
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -85,6 +92,42 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
                 .padding(16.dp)
                 .verticalScroll(rememberScrollState())
         ) {
+            ExpandableSection(title = "المظهر", icon = Icons.Filled.Palette) {
+                SubsectionTitle("لون التطبيق")
+                AppTheme.entries.forEach { theme ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(
+                            selected = state.settings.appTheme == theme,
+                            onClick = { viewModel.setAppTheme(theme) }
+                        )
+                        Row(
+                            modifier = Modifier.padding(top = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .background(paletteFor(theme).primary, CircleShape)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Box(
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .background(paletteFor(theme).secondary, CircleShape)
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Text(theme.displayName)
+                        }
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "يُطبَّق اللون على كامل التطبيق: الصفحة الرئيسية، الإعدادات، شاشة المكالمة، والودجت.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+            }
+
             ExpandableSection(title = "الموقع", icon = Icons.Filled.LocationOn, initiallyExpanded = true) {
                 Text(
                     if (state.settings.hasLocation) {

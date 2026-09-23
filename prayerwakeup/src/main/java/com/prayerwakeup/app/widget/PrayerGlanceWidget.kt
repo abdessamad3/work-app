@@ -30,6 +30,7 @@ import com.prayerwakeup.app.MainActivity
 import com.prayerwakeup.app.data.PrayerTimesResolver
 import com.prayerwakeup.app.data.settings.SettingsRepository
 import com.prayerwakeup.app.domain.Prayer
+import com.prayerwakeup.app.ui.theme.paletteFor
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -49,10 +50,7 @@ interface PrayerWidgetEntryPoint {
     fun timesResolver(): PrayerTimesResolver
 }
 
-// Matches PrayerWakeupTheme's light-mode colors (ui/theme/Theme.kt) so the widget doesn't look
-// like an unstyled placeholder next to the rest of the app.
-private val CardBackground = Color(0xFF0B3D2E)
-private val AccentGold = Color(0xFFF2C94C)
+// OnCard/OnCardMuted stay fixed since every theme's primary color is dark enough for light text.
 private val OnCard = Color(0xFFF4F4F0)
 private val OnCardMuted = Color(0xFFCBD6CF)
 
@@ -63,10 +61,11 @@ object PrayerGlanceWidget : GlanceAppWidget() {
         val timesResolver = entryPoint.timesResolver()
         val settings = settingsRepository.settingsFlow.first()
         val formatter = DateTimeFormatter.ofPattern("hh:mm a")
+        val palette = paletteFor(settings.appTheme)
 
         if (!settings.hasLocation) {
             provideContent {
-                CardContainer {
+                CardContainer(backgroundColor = palette.primary) {
                     Text("صلاتي", style = TextStyle(fontWeight = FontWeight.Bold, fontSize = 16.sp, color = ColorProvider(OnCard)))
                     Spacer(GlanceModifier.height(6.dp))
                     Text(
@@ -96,17 +95,17 @@ object PrayerGlanceWidget : GlanceAppWidget() {
         val rows = ordered.map { it.first.arabicName to it.second.format(formatter) }
 
         provideContent {
-            WidgetContent(nextName = nextName, nextTime = nextTime, rows = rows)
+            WidgetContent(nextName = nextName, nextTime = nextTime, rows = rows, palette = palette)
         }
     }
 }
 
 @Composable
-private fun CardContainer(content: @Composable () -> Unit) {
+private fun CardContainer(backgroundColor: Color, content: @Composable () -> Unit) {
     Column(
         modifier = GlanceModifier
             .fillMaxSize()
-            .background(CardBackground)
+            .background(backgroundColor)
             .appWidgetBackground()
             .cornerRadius(20.dp)
             .padding(16.dp)
@@ -117,8 +116,13 @@ private fun CardContainer(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun WidgetContent(nextName: String, nextTime: String, rows: List<Pair<String, String>>) {
-    CardContainer {
+private fun WidgetContent(
+    nextName: String,
+    nextTime: String,
+    rows: List<Pair<String, String>>,
+    palette: com.prayerwakeup.app.ui.theme.ThemePalette
+) {
+    CardContainer(backgroundColor = palette.primary) {
         Text("الصلاة القادمة", style = TextStyle(fontSize = 11.sp, color = ColorProvider(OnCardMuted)))
         Spacer(GlanceModifier.height(2.dp))
         Row(modifier = GlanceModifier.fillMaxWidth()) {
@@ -129,7 +133,7 @@ private fun WidgetContent(nextName: String, nextTime: String, rows: List<Pair<St
             )
             Text(
                 nextTime,
-                style = TextStyle(fontWeight = FontWeight.Bold, fontSize = 22.sp, color = ColorProvider(AccentGold))
+                style = TextStyle(fontWeight = FontWeight.Bold, fontSize = 22.sp, color = ColorProvider(palette.secondary))
             )
         }
         Spacer(GlanceModifier.height(12.dp))
