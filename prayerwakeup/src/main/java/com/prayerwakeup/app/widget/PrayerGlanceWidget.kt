@@ -1,14 +1,18 @@
 package com.prayerwakeup.app.widget
 
 import android.content.Context
+import android.os.SystemClock
+import android.widget.RemoteViews
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
+import androidx.glance.LocalContext
 import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
+import androidx.glance.appwidget.AndroidRemoteViews
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.LinearProgressIndicator
@@ -31,6 +35,7 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import com.prayerwakeup.app.MainActivity
+import com.prayerwakeup.app.R
 import com.prayerwakeup.app.data.PrayerTimesResolver
 import com.prayerwakeup.app.data.settings.SettingsRepository
 import com.prayerwakeup.app.domain.HijriDate
@@ -122,7 +127,7 @@ object PrayerGlanceWidget : GlanceAppWidget() {
 
         val hijriLabel = HijriDate.forDate(today, zoneId).displayLabel
         val locationLabel = settings.locationLabel.ifBlank { settings.moroccoCityLabel }.ifBlank { "صلاتي" }
-        val remainingLabel = formatRemaining(Duration.between(now, next.second))
+        val remainingMillis = Duration.between(now, next.second).toMillis().coerceAtLeast(0)
         val rows = ordered.map { (prayer, time) ->
             Triple(prayer.arabicName, time.format(formatter), nextIndex >= 0 && prayer == next.first)
         }
@@ -133,19 +138,12 @@ object PrayerGlanceWidget : GlanceAppWidget() {
                 hijriLabel = hijriLabel,
                 locationLabel = locationLabel,
                 nextName = next.first.arabicName,
-                remainingLabel = remainingLabel,
+                remainingMillis = remainingMillis,
                 progress = progress,
                 rows = rows
             )
         }
     }
-}
-
-private fun formatRemaining(duration: Duration): String {
-    val totalMinutes = duration.toMinutes().coerceAtLeast(0)
-    val hours = totalMinutes / 60
-    val minutes = totalMinutes % 60
-    return if (hours > 0) "بعد %d:%02d".format(hours, minutes) else "بعد %d د".format(minutes)
 }
 
 @Composable
@@ -169,7 +167,7 @@ private fun WidgetContent(
     hijriLabel: String,
     locationLabel: String,
     nextName: String,
-    remainingLabel: String,
+    remainingMillis: Long,
     progress: Float,
     rows: List<Triple<String, String, Boolean>>
 ) {
@@ -190,7 +188,7 @@ private fun WidgetContent(
         Spacer(GlanceModifier.height(16.dp))
 
         Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.Vertical.CenterVertically) {
-            Text(remainingLabel, style = TextStyle(fontSize = 15.sp, color = ColorProvider(OnCardMuted)))
+            CountdownChronometer(remainingMillis = remainingMillis)
             Spacer(GlanceModifier.defaultWeight())
             Text(nextName, style = TextStyle(fontWeight = FontWeight.Bold, fontSize = 26.sp, color = ColorProvider(OnCard)))
         }
@@ -232,6 +230,20 @@ private fun WidgetContent(
             }
         }
     }
+}
+
+// Glance's own Text can't tick on its own — the widget provider only redraws every 30 minutes
+// (Android's minimum updatePeriodMillis). A RemoteViews Chronometer, on the other hand, updates
+// itself once it's attached to the host's window, independent of our process, so it's the only
+// way to get a genuinely live "H:MM:SS" countdown on a home-screen widget.
+@Composable
+private fun CountdownChronometer(remainingMillis: Long) {
+    val context = LocalContext.current
+    val remoteViews = RemoteViews(context.packageName, R.layout.widget_chronometer)
+    val base = SystemClock.elapsedRealtime() + remainingMillis
+    remoteViews.setChronometerCountDown(R.id.prayer_countdown_chronometer, true)
+    remoteViews.setChronometer(R.id.prayer_countdown_chronometer, base, "بعد %s", true)
+    AndroidRemoteViews(remoteViews = remoteViews)
 }
 
 class PrayerGlanceWidgetReceiver : GlanceAppWidgetReceiver() {
