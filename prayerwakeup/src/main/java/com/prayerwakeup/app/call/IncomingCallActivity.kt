@@ -95,6 +95,19 @@ class IncomingCallActivity : ComponentActivity() {
                 val backgroundColor = paletteFor(settings.appTheme).primary
                 var showChallenge by remember { mutableStateOf(false) }
 
+                // The Answer path never explicitly closes this screen — the service just runs the
+                // conversation, marks it Ended, and resets to Idle a moment later. Without this,
+                // that reset left the activity showing a blank Idle screen forever instead of
+                // returning the user to whatever was in the foreground before the call.
+                var hasStartedSession by remember { mutableStateOf(false) }
+                LaunchedEffect(state) {
+                    if (state !is CallUiState.Idle) {
+                        hasStartedSession = true
+                    } else if (hasStartedSession) {
+                        finish()
+                    }
+                }
+
                 if (showChallenge) {
                     WakeChallengeScreen(
                         challenge = settings.wakeChallenge,
