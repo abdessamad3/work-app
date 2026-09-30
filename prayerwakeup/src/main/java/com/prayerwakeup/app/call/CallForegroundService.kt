@@ -4,6 +4,9 @@ import android.app.Notification
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import androidx.core.app.NotificationCompat
 import com.prayerwakeup.app.PrayerWakeupApp
 import com.prayerwakeup.app.conversation.CallEvent
@@ -37,6 +40,7 @@ class CallForegroundService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var actionsJob: Job? = null
     private val cancelled = AtomicBoolean(false)
+    private var audioFocusRequest: AudioFocusRequest? = null
 
     override fun onBind(intent: Intent?) = null
 
@@ -62,6 +66,7 @@ class CallForegroundService : Service() {
 
     private suspend fun beginCall(prayer: Prayer) {
         cancelled.set(false)
+        requestAudioFocus()
         val wakeChallenge = settingsRepository.settingsFlow.first().wakeChallenge
         startForeground(NOTIFICATION_ID, buildForegroundNotification(prayer))
         postFullScreenCallNotification(prayer, wakeChallenge)
@@ -139,9 +144,33 @@ class CallForegroundService : Service() {
     }
 
     private fun finishCall() {
+        abandonAudioFocus()
         sessionController.reset()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
+    }
+
+    // Exclusive transient focus tells other apps (music, podcasts, video) to stop playback
+    // entirely rather than just duck — held for the whole call (ringing + conversation), not just
+    // the ringtone, so nothing competes with the wake-up call from start to finish.
+    private fun requestAudioFocus() {
+        val audioManager = getSystemService(AudioManager::class.java) ?: return
+        val attributes = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_ALARM)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
+        val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
+            .setAudioAttributes(attributes)
+            .setAcceptsDelayedFocusGain(false)
+            .build()
+        audioManager.requestAudioFocus(request)
+        audioFocusRequest = request
+    }
+
+    private fun abandonAudioFocus() {
+        val request = audioFocusRequest ?: return
+        getSystemService(AudioManager::class.java)?.abandonAudioFocusRequest(request)
+        audioFocusRequest = null
     }
 
     private fun buildForegroundNotification(prayer: Prayer): Notification =
@@ -201,6 +230,7 @@ class CallForegroundService : Service() {
         serviceScope.cancel()
         ringtonePlayer.stop()
         conversationManager.stop()
+        abandonAudioFocus()
         getSystemService(android.app.NotificationManager::class.java)?.cancel(FULL_SCREEN_NOTIFICATION_ID)
         super.onDestroy()
     }
