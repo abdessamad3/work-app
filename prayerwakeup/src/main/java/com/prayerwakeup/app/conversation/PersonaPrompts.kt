@@ -2,6 +2,7 @@ package com.prayerwakeup.app.conversation
 
 import com.prayerwakeup.app.domain.CallerPersona
 import com.prayerwakeup.app.domain.Prayer
+import com.prayerwakeup.app.domain.ScriptLine
 
 /** Arabic prompt/phrase bank for the wake-up caller persona. */
 object PersonaPrompts {
@@ -32,8 +33,16 @@ object PersonaPrompts {
         else -> "هذه محاولتي الأخيرة، انهض الآن وصلِّ، لا تضيّع وقت ${prayer.arabicName}."
     }
 
-    /** Used when there is no API key, or the network/API call fails mid-call. */
-    fun fallbackReply(): String = "استيقظ الآن وتوضأ وصلِّ، لا تؤخر الصلاة عن وقتها."
-
     fun closingLine(): String = "بارك الله فيك، صلّ الآن، واجعلها بداية يوم مبارك. مع السلامة."
+
+    /**
+     * Spoken text for a fixed offline-script category once a recorded clip isn't available for
+     * it — the TTS/ElevenLabs fallback that [category]'s recorded clip would otherwise replace.
+     */
+    fun offlineLine(category: ScriptLine, prayer: Prayer): String = when (category) {
+        ScriptLine.OPENING -> "حان وقت صلاة ${prayer.arabicName}، استيقظ الآن."
+        ScriptLine.NUDGE -> "لم أفهم ما قلته، هل أنت مستيقظ؟ من فضلك أخبرني."
+        ScriptLine.MORE_TIME -> "لا تزال صلاة ${prayer.arabicName} تنتظرك، أرجوك انهض الآن ولا تؤجل."
+        ScriptLine.CLOSING -> closingLine()
+    }
 }

@@ -5,4 +5,5 @@ object Routes {
     const val SETTINGS = "settings"
     const val STATISTICS = "statistics"
     const val QIBLA = "qibla"
+    const val RECORD_VOICE = "record_voice"
 }

@@ -9,6 +9,7 @@ import com.prayerwakeup.app.ui.home.HomeScreen
 import com.prayerwakeup.app.ui.qibla.QiblaScreen
 import com.prayerwakeup.app.ui.settings.SettingsScreen
 import com.prayerwakeup.app.ui.stats.StatisticsScreen
+import com.prayerwakeup.app.ui.voice.RecordVoiceScreen
 
 @Composable
 fun PrayerWakeupNavGraph(navController: NavHostController = rememberNavController()) {
@@ -21,13 +22,19 @@ fun PrayerWakeupNavGraph(navController: NavHostController = rememberNavControlle
             )
         }
         composable(Routes.SETTINGS) {
-            SettingsScreen(onBack = { navController.popBackStack() })
+            SettingsScreen(
+                onBack = { navController.popBackStack() },
+                onOpenRecordVoice = { navController.navigate(Routes.RECORD_VOICE) }
+            )
         }
         composable(Routes.STATISTICS) {
             StatisticsScreen(onBack = { navController.popBackStack() })
         }
         composable(Routes.QIBLA) {
             QiblaScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Routes.RECORD_VOICE) {
+            RecordVoiceScreen(onBack = { navController.popBackStack() })
         }
     }
 }

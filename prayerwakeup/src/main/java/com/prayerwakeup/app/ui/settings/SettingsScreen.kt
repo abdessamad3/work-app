@@ -70,7 +70,11 @@ import com.prayerwakeup.app.ui.theme.paletteFor
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewModel()) {
+fun SettingsScreen(
+    onBack: () -> Unit,
+    onOpenRecordVoice: () -> Unit,
+    viewModel: SettingsViewModel = hiltViewModel()
+) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
 
@@ -299,6 +303,15 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewMo
                     viewModel = viewModel,
                     selectedVoiceLabel = state.settings.elevenLabsVoiceLabel
                 )
+
+                Spacer(Modifier.height(16.dp))
+                SubsectionTitle("صوتك المسجَّل (بدون إنترنت)")
+                Text(
+                    "سجّل صوتك بنفسك لجمل المكالمة الأساسية، ليستخدمها التطبيق بدلاً من الصوت الاصطناعي " +
+                        "كلما لم يكن هناك اتصال بالإنترنت أو مفتاح API — محادثة شخصية بصوتك تعمل دون شبكة."
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(onClick = onOpenRecordVoice) { Text("تسجيل الصوت") }
             }
 
             ExpandableSection(
