@@ -3,9 +3,12 @@ package com.prayerwakeup.app.conversation
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.speech.RecognitionListener
 import android.speech.RecognitionService
 import android.speech.RecognizerIntent
@@ -26,6 +29,14 @@ class ArabicSpeechRecognizer @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     fun isAvailable(): Boolean = SpeechRecognizer.isRecognitionAvailable(context)
+
+    private fun hasInternet(): Boolean {
+        val connectivityManager = context.getSystemService(ConnectivityManager::class.java) ?: return true
+        val network = connectivityManager.activeNetwork ?: return false
+        val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+            capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+    }
 
     /**
      * Some OEM skins (seen on a Realme device) register their own RecognitionService as the
@@ -62,9 +73,11 @@ class ArabicSpeechRecognizer @Inject constructor(
             val handle = createBestRecognizer(context)
             val recognizer = handle.recognizer
             var finished = false
+            var finishScheduled = false
             var speechDetected = false
             var maxRms = -100f
             var lastPartial: String? = null
+            val startedAt = SystemClock.elapsedRealtime()
             val timeoutHandler = Handler(Looper.getMainLooper())
 
             // Turns a bare error/empty outcome into something that says whether the mic
@@ -80,13 +93,29 @@ class ArabicSpeechRecognizer @Inject constructor(
                 return "$base (المحرك: ${handle.engineLabel}، $micState)$partial"
             }
 
-            fun finish(result: ListenResult) {
+            fun finishNow(result: ListenResult) {
                 if (finished) return
                 finished = true
                 timeoutHandler.removeCallbacksAndMessages(null)
                 runCatching { recognizer.stopListening() }
                 runCatching { recognizer.destroy() }
                 if (continuation.isActive) continuation.resume(result)
+            }
+
+            // A structural failure (no network, no offline language pack, a recognizer that
+            // rejects the request outright) can come back within milliseconds — seen live as
+            // "error 12" the instant the call tries to listen. Without this, the user gets no
+            // real window to speak at all: the call just cycles straight to the next nudge.
+            // Pad such early, speech-less failures out to a minimum listening window instead.
+            fun finish(result: ListenResult) {
+                if (finished || finishScheduled) return
+                val elapsed = SystemClock.elapsedRealtime() - startedAt
+                if (result.text == null && !speechDetected && elapsed < MIN_LISTEN_MILLIS) {
+                    finishScheduled = true
+                    timeoutHandler.postDelayed({ finishNow(result) }, MIN_LISTEN_MILLIS - elapsed)
+                } else {
+                    finishNow(result)
+                }
             }
 
             // Google's on-device "final" pass is sometimes stricter than its streaming partial
@@ -139,9 +168,16 @@ class ArabicSpeechRecognizer @Inject constructor(
                 override fun onEvent(eventType: Int, params: Bundle?) = Unit
             })
 
+            // Without a network connection, Google's cloud recognizer can reject the request
+            // outright (seen live as an immediate "language not supported" error) before the user
+            // ever gets a chance to speak. Hint at on-device recognition in that case instead —
+            // it actually listens, as long as an Arabic offline pack is installed. "ar-SA" is more
+            // accurate online, but offline packs are usually registered under the generic "ar".
+            val preferOffline = !hasInternet()
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ar-SA")
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, if (preferOffline) "ar" else "ar-SA")
+                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, preferOffline)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2000)
@@ -166,6 +202,16 @@ class ArabicSpeechRecognizer @Inject constructor(
         SpeechRecognizer.ERROR_NO_MATCH -> "لم يتم التعرف على الكلام"
         SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "خدمة التعرف الصوتي مشغولة"
         SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "إذن الميكروفون غير ممنوح لخدمة التعرف الصوتي"
+        12 -> "التعرف الصوتي دون إنترنت غير متوفر للعربية على هذا الجهاز (نزّل حزمة اللغة العربية الصوتية من إعدادات تطبيق Google)"
+        13 -> "تعذر تحميل حزمة اللغة العربية الصوتية دون إنترنت"
         else -> "خطأ غير معروف (رمز $error)"
+    }
+
+    private companion object {
+        // How long a failed listen attempt is padded out to before reporting failure, so a
+        // structural error that fires almost instantly (no network, no offline language pack)
+        // still gives the user a real window to speak instead of cycling through nudges in a
+        // blink. Well under the 9s overall timeout, so it never delays a genuine full-length listen.
+        const val MIN_LISTEN_MILLIS = 3_000L
     }
 }
