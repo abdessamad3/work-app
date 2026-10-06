@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PlayArrow
@@ -31,6 +32,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -52,23 +54,23 @@ import androidx.hilt.navigation.compose.hiltViewModel
 fun RecordVoiceScreen(onBack: () -> Unit, viewModel: RecordVoiceViewModel = hiltViewModel()) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
-    var pendingItem by remember { mutableStateOf<VoiceItem?>(null) }
+    var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
 
     val requestMicPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
-        val item = pendingItem
-        pendingItem = null
-        if (granted && item != null) viewModel.startRecording(item)
+        val action = pendingAction
+        pendingAction = null
+        if (granted) action?.invoke()
     }
 
-    fun requestStart(item: VoiceItem) {
+    fun withMicPermission(action: () -> Unit) {
         val hasPermission = context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) ==
             PackageManager.PERMISSION_GRANTED
         if (hasPermission) {
-            viewModel.startRecording(item)
+            action()
         } else {
-            pendingItem = item
+            pendingAction = action
             requestMicPermission.launch(Manifest.permission.RECORD_AUDIO)
         }
     }
@@ -85,37 +87,104 @@ fun RecordVoiceScreen(onBack: () -> Unit, viewModel: RecordVoiceViewModel = hilt
             )
         }
     ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
-            Text(
-                "سجّل صوتك بنفسك لهذه الجمل، وسيستخدمها التطبيق أثناء المكالمة بدل الصوت الاصطناعي " +
-                    "كلما لم يكن هناك اتصال بالإنترنت أو مفتاح API. أي جملة لم تُسجَّل ستُقرأ بالصوت الافتراضي.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.outline
-            )
-            Spacer(Modifier.height(12.dp))
+        LazyColumn(modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp)) {
+            item {
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    "سجّل صوتك بنفسك لهذه الجمل، وسيستخدمها التطبيق أثناء المكالمة بدل الصوت الاصطناعي " +
+                        "كلما لم يكن هناك اتصال بالإنترنت أو مفتاح API. أي جملة لم تُسجَّل ستُقرأ بالصوت الافتراضي.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+                Spacer(Modifier.height(12.dp))
+            }
 
-            LazyColumn {
-                items(state.items, key = { it.key }) { item ->
-                    VoiceItemCard(
-                        item = item,
-                        isRecording = state.recordingKey == item.key,
-                        isPlaying = state.playingKey == item.key,
+            items(state.items, key = { it.key }) { item ->
+                VoiceItemCard(
+                    label = item.label,
+                    sampleText = item.sampleText,
+                    hasRecording = item.hasRecording,
+                    isRecording = state.recordingKey == item.key,
+                    isPlaying = state.playingKey == item.key,
+                    recordingInProgress = state.recordingKey != null,
+                    onStartRecording = { withMicPermission { viewModel.startRecording(item) } },
+                    onStopRecording = { viewModel.stopRecording(item) },
+                    onPlay = { viewModel.play(item.file, item.key) },
+                    onDelete = { viewModel.delete(item) }
+                )
+                Spacer(Modifier.height(10.dp))
+            }
+
+            if (state.unmatchedPhrases.isNotEmpty()) {
+                item {
+                    Spacer(Modifier.height(12.dp))
+                    Text("عبارات لم نفهمها", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "هذا ما قاله المستخدم في مكالمات سابقة ولم يكن للتطبيق رد عليه. سجّل رداً " +
+                            "مناسباً، وستُستخدم عبارة التفعيل (قابلة للتعديل) لمطابقة ما يُسمع في المكالمات القادمة.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                    Spacer(Modifier.height(10.dp))
+                }
+                items(state.unmatchedPhrases, key = { "unmatched_$it" }) { phrase ->
+                    UnmatchedPhraseCard(
+                        phrase = phrase,
+                        key = viewModel.unmatchedKey(phrase),
+                        isRecording = state.recordingKey == viewModel.unmatchedKey(phrase),
                         recordingInProgress = state.recordingKey != null,
-                        onStartRecording = { requestStart(item) },
-                        onStopRecording = { viewModel.stopRecording(item) },
-                        onPlay = { viewModel.play(item) },
-                        onDelete = { viewModel.delete(item) }
+                        onStartRecording = { withMicPermission { viewModel.startRecordingForUnmatched(phrase) } },
+                        onStopRecording = { trigger -> viewModel.stopRecordingForUnmatched(phrase, trigger) },
+                        onDismiss = { viewModel.dismissUnmatched(phrase) }
                     )
                     Spacer(Modifier.height(10.dp))
                 }
             }
+
+            if (state.customResponses.isNotEmpty()) {
+                item {
+                    Spacer(Modifier.height(12.dp))
+                    Text("ردودك المخصصة", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "الردود التي علّمتها للتطبيق حتى الآن.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                    Spacer(Modifier.height(10.dp))
+                }
+                items(state.customResponses, key = { "custom_${it.id}" }) { response ->
+                    val key = viewModel.customKey(response)
+                    val hasRecording = remember(response.id, state.recordingVersion) {
+                        viewModel.customResponseHasRecording(response)
+                    }
+                    VoiceItemCard(
+                        label = response.triggerPhrase,
+                        sampleText = "يُستخدم عندما يُسمع شيء قريب من: \"${response.triggerPhrase}\"",
+                        hasRecording = hasRecording,
+                        isRecording = state.recordingKey == key,
+                        isPlaying = state.playingKey == key,
+                        recordingInProgress = state.recordingKey != null,
+                        onStartRecording = { withMicPermission { viewModel.startRecordingForCustom(response) } },
+                        onStopRecording = { viewModel.stopRecordingForCustom(response) },
+                        onPlay = { viewModel.play(viewModel.audioFileFor(response), key) },
+                        onDelete = { viewModel.deleteCustomResponse(response) }
+                    )
+                    Spacer(Modifier.height(10.dp))
+                }
+            }
+
+            item { Spacer(Modifier.height(16.dp)) }
         }
     }
 }
 
 @Composable
 private fun VoiceItemCard(
-    item: VoiceItem,
+    label: String,
+    sampleText: String,
+    hasRecording: Boolean,
     isRecording: Boolean,
     isPlaying: Boolean,
     recordingInProgress: Boolean,
@@ -135,24 +204,24 @@ private fun VoiceItemCard(
         )
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
-            Text(item.label, style = MaterialTheme.typography.titleSmall)
+            Text(label, style = MaterialTheme.typography.titleSmall)
             Spacer(Modifier.height(4.dp))
             Text(
-                item.sampleText,
+                sampleText,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    if (item.hasRecording) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+                    if (hasRecording) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
                     contentDescription = null,
                     modifier = Modifier.size(16.dp),
-                    tint = if (item.hasRecording) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                    tint = if (hasRecording) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
                 )
                 Spacer(Modifier.width(6.dp))
                 Text(
-                    if (isRecording) "جارٍ التسجيل..." else if (item.hasRecording) "تم التسجيل" else "لم يُسجَّل بعد",
+                    if (isRecording) "جارٍ التسجيل..." else if (hasRecording) "تم التسجيل" else "لم يُسجَّل بعد",
                     style = MaterialTheme.typography.bodySmall
                 )
             }
@@ -168,9 +237,9 @@ private fun VoiceItemCard(
                     OutlinedButton(onClick = onStartRecording, enabled = !recordingInProgress) {
                         Icon(Icons.Filled.Mic, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text(if (item.hasRecording) "إعادة التسجيل" else "تسجيل")
+                        Text(if (hasRecording) "إعادة التسجيل" else "تسجيل")
                     }
-                    if (item.hasRecording) {
+                    if (hasRecording) {
                         TextButton(onClick = onPlay, enabled = !isPlaying) {
                             Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(4.dp))
@@ -181,6 +250,62 @@ private fun VoiceItemCard(
                             Spacer(Modifier.width(4.dp))
                             Text("حذف")
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun UnmatchedPhraseCard(
+    phrase: String,
+    key: String,
+    isRecording: Boolean,
+    recordingInProgress: Boolean,
+    onStartRecording: () -> Unit,
+    onStopRecording: (triggerText: String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var triggerText by remember(key) { mutableStateOf(phrase) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isRecording) {
+                MaterialTheme.colorScheme.errorContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant
+            }
+        )
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Text("\"$phrase\"", style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = triggerText,
+                onValueChange = { triggerText = it },
+                label = { Text("عبارة التفعيل (يمكنك اختصارها)") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (isRecording) {
+                    OutlinedButton(onClick = { onStopRecording(triggerText) }) {
+                        Icon(Icons.Filled.Stop, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("إيقاف وحفظ الرد")
+                    }
+                } else {
+                    OutlinedButton(onClick = onStartRecording, enabled = !recordingInProgress) {
+                        Icon(Icons.Filled.Mic, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("تسجيل رد")
+                    }
+                    TextButton(onClick = onDismiss, enabled = !recordingInProgress) {
+                        Icon(Icons.Filled.Close, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("تجاهل")
                     }
                 }
             }
