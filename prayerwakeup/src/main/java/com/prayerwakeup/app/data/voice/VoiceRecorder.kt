@@ -44,7 +44,7 @@ class VoiceRecorder @Inject constructor(
 
     /** Stops the in-progress recording and copies it to [destination]. Returns whether it saved. */
     fun stopAndSave(destination: File): Boolean {
-        val stopped = runCatching { recorder?.apply { stop(); release() } }.isSuccess
+        val stopped = recorder?.let(::stopAndReleaseRecorder) ?: false
         recorder = null
         val temp = tempFile
         tempFile = null
@@ -61,10 +61,20 @@ class VoiceRecorder @Inject constructor(
     }
 
     fun cancel() {
-        runCatching { recorder?.apply { stop(); release() } }
+        recorder?.let(::stopAndReleaseRecorder)
         recorder = null
         tempFile?.delete()
         tempFile = null
+    }
+
+    // MediaRecorder.stop() throws RuntimeException when called too soon after start() (a very
+    // normal thing when quickly retrying a recording) — stop() and release() must each run
+    // independently, or a thrown stop() skips release() and leaks the native recorder/mic handle
+    // until GC finalization, which can then make the next recording attempt fail too.
+    private fun stopAndReleaseRecorder(r: MediaRecorder): Boolean {
+        val stopped = runCatching { r.stop() }.isSuccess
+        runCatching { r.release() }
+        return stopped
     }
 
     fun playPreview(file: File, onDone: () -> Unit) {
@@ -86,7 +96,7 @@ class VoiceRecorder @Inject constructor(
     }
 
     fun stopPreview() {
-        runCatching { previewPlayer?.stop(); previewPlayer?.release() }
+        previewPlayer?.let { p -> runCatching { p.stop() }; runCatching { p.release() } }
         previewPlayer = null
     }
 }

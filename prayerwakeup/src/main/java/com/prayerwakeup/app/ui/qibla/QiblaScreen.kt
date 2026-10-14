@@ -6,6 +6,7 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,6 +23,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
@@ -32,9 +34,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.prayerwakeup.app.ui.theme.ZelligeBackground
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -67,10 +71,18 @@ fun QiblaScreen(onBack: () -> Unit, viewModel: QiblaViewModel = hiltViewModel())
         }
     }
 
+    Box(Modifier.fillMaxSize()) {
+    ZelligeBackground(
+        modifier = Modifier.fillMaxSize(),
+        baseColor = MaterialTheme.colorScheme.primary,
+        patternColor = MaterialTheme.colorScheme.secondary
+    )
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
                 title = { Text("اتجاه القبلة") },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "رجوع")
@@ -99,7 +111,7 @@ fun QiblaScreen(onBack: () -> Unit, viewModel: QiblaViewModel = hiltViewModel())
                 modifier = Modifier
                     .size(160.dp)
                     .rotate(relativeAngle),
-                tint = MaterialTheme.colorScheme.primary
+                tint = MaterialTheme.colorScheme.secondary
             )
             Spacer(Modifier.height(24.dp))
             Text("وجّه الجهاز حتى يشير السهم للأعلى", style = MaterialTheme.typography.bodyMedium)
@@ -116,5 +128,6 @@ fun QiblaScreen(onBack: () -> Unit, viewModel: QiblaViewModel = hiltViewModel())
                 color = MaterialTheme.colorScheme.outline
             )
         }
+    }
     }
 }

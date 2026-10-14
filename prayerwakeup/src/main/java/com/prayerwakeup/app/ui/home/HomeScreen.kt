@@ -170,7 +170,7 @@ fun HomeScreen(
                     Text(
                         "رمضان مبارك",
                         style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.secondary
                     )
                     Spacer(Modifier.height(8.dp))
                 }
@@ -382,7 +382,10 @@ private fun PrayerRow(
     }
     Surface(
         shape = MaterialTheme.shapes.medium,
-        color = if (isNext) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f) else MaterialTheme.colorScheme.surface,
+        // Opaque rather than translucent: a partly-transparent fill now blends with the patterned
+        // background behind it instead of a flat Scaffold color, which made the highlighted row's
+        // tint unpredictable.
+        color = if (isNext) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
     ) {
         Row(

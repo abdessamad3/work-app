@@ -29,7 +29,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import javax.inject.Inject
@@ -83,7 +82,8 @@ class HomeViewModel @Inject constructor(
                 prayerLogRepository.entriesFlow
             ) { settings, apiKey, status, entries -> Quadruple(settings, apiKey, status, entries) }
                 .collect { (settings, apiKey, status, entries) ->
-                    applySettings(settings, apiKey.isNotBlank(), status, prayedTodaySet(entries))
+                    val zoneId = runCatching { ZoneId.of(settings.timeZoneId) }.getOrDefault(ZoneId.systemDefault())
+                    applySettings(settings, apiKey.isNotBlank(), status, prayedTodaySet(entries, zoneId))
                 }
         }
     }
@@ -93,20 +93,25 @@ class HomeViewModel @Inject constructor(
             val settings = settingsRepository.settingsFlow.first()
             val status = schedulingStatusStore.statusFlow.first()
             val entries = prayerLogRepository.entriesFlow.first()
-            applySettings(settings, secureKeyStore.hasGeminiApiKey(), status, prayedTodaySet(entries))
+            val zoneId = runCatching { ZoneId.of(settings.timeZoneId) }.getOrDefault(ZoneId.systemDefault())
+            applySettings(settings, secureKeyStore.hasGeminiApiKey(), status, prayedTodaySet(entries, zoneId))
         }
     }
 
-    private fun prayedTodaySet(entries: List<PrayerLogEntry>): Set<Prayer> {
-        val today = LocalDate.now()
+    private fun prayedTodaySet(entries: List<PrayerLogEntry>, zoneId: ZoneId): Set<Prayer> {
+        val today = ZonedDateTime.now(zoneId).toLocalDate()
         return entries.filter { it.date == today && it.prayed }.map { it.prayer }.toSet()
     }
 
     fun togglePrayed(prayer: Prayer, currentlyPrayed: Boolean) {
         viewModelScope.launch {
-            prayerLogRepository.setPrayed(LocalDate.now(), prayer, !currentlyPrayed)
+            val zoneId = currentZoneId()
+            prayerLogRepository.setPrayed(ZonedDateTime.now(zoneId).toLocalDate(), prayer, !currentlyPrayed)
         }
     }
+
+    private suspend fun currentZoneId(): ZoneId =
+        runCatching { ZoneId.of(settingsRepository.settingsFlow.first().timeZoneId) }.getOrDefault(ZoneId.systemDefault())
 
     private fun isBatteryOptimizationExempt(): Boolean {
         val pm = context.getSystemService(PowerManager::class.java) ?: return true
@@ -124,8 +129,13 @@ class HomeViewModel @Inject constructor(
     }
 
     private suspend fun applySettings(settings: PrayerSettings, hasApiKey: Boolean, status: SchedulingStatus, prayedToday: Set<Prayer>) {
-        val today = LocalDate.now()
-        val hijri = HijriDate.forDate(today)
+        // Hoisted above the hasLocation check and reused for prayer times below too, so the
+        // Hijri date / daily athkar / "today" never disagree with which calendar day the prayer
+        // times themselves belong to — they used to fall back to the device's current system
+        // zone, which can differ from the configured prayer-location zone while traveling.
+        val zoneId = runCatching { ZoneId.of(settings.timeZoneId) }.getOrDefault(ZoneId.systemDefault())
+        val today = ZonedDateTime.now(zoneId).toLocalDate()
+        val hijri = HijriDate.forDate(today, zoneId)
         val athkar = DailyAthkar.forDate(today)
 
         if (!settings.hasLocation) {
@@ -145,7 +155,6 @@ class HomeViewModel @Inject constructor(
             )
             return
         }
-        val zoneId = runCatching { ZoneId.of(settings.timeZoneId) }.getOrDefault(ZoneId.systemDefault())
         val now = ZonedDateTime.now(zoneId)
         val times = timesResolver.resolveForDate(settings, now.toLocalDate(), zoneId)
         val ordered = listOf(

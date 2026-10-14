@@ -1,6 +1,7 @@
 package com.prayerwakeup.app.domain
 
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import javax.inject.Inject
@@ -129,7 +130,20 @@ class PrayerTimeCalculator @Inject constructor() {
 
     private fun toZonedDateTime(date: LocalDate, hours: Double, zoneId: ZoneId): ZonedDateTime {
         val fixed = PrayerMath.fixHour(hours)
-        val totalSeconds = Math.round(fixed * 3600.0)
-        return date.atStartOfDay(zoneId).plusSeconds(totalSeconds)
+        var totalSeconds = Math.round(fixed * 3600.0)
+        // ZonedDateTime.plusSeconds adds on the instant time-line (elapsed real duration), not
+        // the wall-clock one — across a DST transition that lands the result an hour off from the
+        // intended local prayer time. Building the LocalDateTime directly and resolving it against
+        // the zone (like plusDays does) keeps it on the wall-clock time-line instead.
+        var resultDate = date
+        if (totalSeconds >= 86_400L) {
+            resultDate = date.plusDays(totalSeconds / 86_400L)
+            totalSeconds %= 86_400L
+        } else if (totalSeconds < 0L) {
+            val days = (-totalSeconds + 86_399L) / 86_400L
+            resultDate = date.minusDays(days)
+            totalSeconds += days * 86_400L
+        }
+        return resultDate.atTime(LocalTime.ofSecondOfDay(totalSeconds)).atZone(zoneId)
     }
 }

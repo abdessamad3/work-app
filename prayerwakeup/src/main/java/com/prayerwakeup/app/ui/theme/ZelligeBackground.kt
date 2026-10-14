@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import kotlin.math.cos
@@ -21,31 +22,42 @@ fun Color.darken(factor: Float): Color = copy(red = red * factor, green = green 
 /**
  * A background inspired by Zellige Fassi — the interlocking eight-point star tessellation
  * (two squares overlaid 45° apart) that's the foundational motif of Fez's traditional geometric
- * tilework. Drawn as a tiled line-art grid at low opacity over a themed vertical gradient, rather
- * than a bundled photo/image, so it scales to any screen and re-tints correctly for all 3 app
- * themes without needing per-theme image assets.
+ * tilework. Each star is filled with a flat tint and outlined, like a real mosaic tile rather than
+ * bare line art, tiled over a themed vertical gradient. Pure vector drawing (no bundled photo), so
+ * it scales to any screen and re-tints correctly for all 3 app themes.
  */
 @Composable
 fun ZelligeBackground(modifier: Modifier = Modifier, baseColor: Color, patternColor: Color) {
     val gradient = Brush.verticalGradient(listOf(baseColor, baseColor.darken(0.55f)))
     Canvas(modifier = modifier.fillMaxSize().background(gradient)) {
         val cell = 56.dp.toPx()
-        val starColor = patternColor.copy(alpha = 0.10f)
-        val strokeWidth = 1.2.dp.toPx()
+        val fillColor = patternColor.copy(alpha = 0.13f)
+        val strokeColor = patternColor.copy(alpha = 0.32f)
+        val strokeWidth = 1.dp.toPx()
         val cols = (size.width / cell).toInt() + 2
         val rows = (size.height / cell).toInt() + 2
         for (row in -1..rows) {
             for (col in -1..cols) {
                 val center = Offset(col * cell + cell / 2f, row * cell + cell / 2f)
-                drawEightPointStar(center, cell * 0.46f, starColor, strokeWidth)
+                drawEightPointStar(center, cell * 0.46f, fillColor, strokeColor, strokeWidth)
             }
         }
     }
 }
 
-private fun DrawScope.drawEightPointStar(center: Offset, radius: Float, color: Color, strokeWidth: Float) {
-    drawPath(squarePath(center, radius, 0f), color = color, style = Stroke(width = strokeWidth))
-    drawPath(squarePath(center, radius, 45f), color = color, style = Stroke(width = strokeWidth))
+private fun DrawScope.drawEightPointStar(
+    center: Offset,
+    radius: Float,
+    fillColor: Color,
+    strokeColor: Color,
+    strokeWidth: Float
+) {
+    val squareA = squarePath(center, radius, 0f)
+    val squareB = squarePath(center, radius, 45f)
+    drawPath(squareA, color = fillColor, style = Fill)
+    drawPath(squareB, color = fillColor, style = Fill)
+    drawPath(squareA, color = strokeColor, style = Stroke(width = strokeWidth))
+    drawPath(squareB, color = strokeColor, style = Stroke(width = strokeWidth))
 }
 
 private fun squarePath(center: Offset, radius: Float, rotationDeg: Float): Path {

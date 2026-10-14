@@ -47,6 +47,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -94,7 +95,7 @@ class IncomingCallActivity : ComponentActivity() {
                 val state by sessionController.uiState.collectAsState()
                 val settings by settingsRepository.settingsFlow.collectAsState(initial = PrayerSettings())
                 val palette = paletteFor(settings.appTheme)
-                var showChallenge by remember { mutableStateOf(false) }
+                var showChallenge by rememberSaveable { mutableStateOf(false) }
 
                 // The Answer path never explicitly closes this screen — the service just runs the
                 // conversation, marks it Ended, and resets to Idle a moment later. Without this,
@@ -350,10 +351,22 @@ private fun ChallengeScaffold(
 @Composable
 private fun StepsChallengeContent(palette: ThemePalette, onCompleted: () -> Unit, onCancel: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    var steps by remember { mutableStateOf(0) }
+    var steps by rememberSaveable { mutableStateOf(0) }
     var sensorAvailable by remember { mutableStateOf(true) }
+    var showFallback by remember { mutableStateOf(false) }
 
-    DisposableEffect(Unit) {
+    // getDefaultSensor() returns a non-null Sensor regardless of whether ACTIVITY_RECOGNITION was
+    // granted (requested fire-and-forget in onCreate, never re-checked here) — on API 29+ a denied
+    // permission makes the sensor deliver zero events while this screen still looks "live", so a
+    // user who denied it would otherwise be stuck on a 0/20 counter with no way off the call.
+    val hasPermission = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
+        context.checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED
+
+    DisposableEffect(hasPermission) {
+        if (!hasPermission) {
+            sensorAvailable = false
+            return@DisposableEffect onDispose {}
+        }
         val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
         val detector = sensorManager?.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR)
         if (sensorManager == null || detector == null) {
@@ -371,9 +384,27 @@ private fun StepsChallengeContent(palette: ThemePalette, onCompleted: () -> Unit
         onDispose { sensorManager.unregisterListener(listener) }
     }
 
+    // Defense in depth: even with permission and a present sensor, some OEM step detectors just
+    // never fire. The challenge exists to make sure someone's awake, not to strand them on this
+    // screen forever, so offer a manual way out if nothing's moved the counter after a while.
+    LaunchedEffect(hasPermission, sensorAvailable) {
+        if (hasPermission && sensorAvailable) {
+            delay(20_000)
+            showFallback = true
+        }
+    }
+
     ChallengeScaffold(title = "امشِ 20 خطوة لإيقاف المنبه", palette = palette, onCancel = onCancel) {
         if (!sensorAvailable) {
-            Text("مستشعر الخطوات غير متوفر على هذا الجهاز.", color = Color.White, textAlign = TextAlign.Center)
+            Text(
+                if (!hasPermission) {
+                    "إذن تتبع النشاط البدني غير ممنوح، لذا لا يمكن عدّ خطواتك."
+                } else {
+                    "مستشعر الخطوات غير متوفر على هذا الجهاز."
+                },
+                color = Color.White,
+                textAlign = TextAlign.Center
+            )
             Spacer(Modifier.height(16.dp))
             Button(onClick = onCompleted) { Text("متابعة على أي حال") }
         } else {
@@ -383,6 +414,17 @@ private fun StepsChallengeContent(palette: ThemePalette, onCompleted: () -> Unit
                 progress = { (steps.toFloat() / TARGET_STEPS).coerceIn(0f, 1f) },
                 modifier = Modifier.fillMaxWidth()
             )
+            if (showFallback) {
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    "لم يُرصد أي خطوة بعد، تأكد من مستشعر الخطوات على جهازك.",
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontSize = 13.sp,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(8.dp))
+                Button(onClick = onCompleted) { Text("متابعة على أي حال") }
+            }
         }
     }
 }
@@ -439,7 +481,7 @@ private fun MathChallengeContent(palette: ThemePalette, onCompleted: () -> Unit,
 
 @Composable
 private fun QuranChallengeContent(palette: ThemePalette, onCompleted: () -> Unit, onCancel: () -> Unit) {
-    var remaining by remember { mutableStateOf(QURAN_MIN_SECONDS) }
+    var remaining by rememberSaveable { mutableStateOf(QURAN_MIN_SECONDS) }
     LaunchedEffect(Unit) {
         while (remaining > 0) {
             delay(1000)

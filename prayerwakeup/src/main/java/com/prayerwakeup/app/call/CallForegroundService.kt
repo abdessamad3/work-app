@@ -39,7 +39,9 @@ class CallForegroundService : Service() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var actionsJob: Job? = null
+    private var answerJob: Job? = null
     private val cancelled = AtomicBoolean(false)
+    private val answered = AtomicBoolean(false)
     private var audioFocusRequest: AudioFocusRequest? = null
 
     override fun onBind(intent: Intent?) = null
@@ -66,6 +68,7 @@ class CallForegroundService : Service() {
 
     private suspend fun beginCall(prayer: Prayer) {
         cancelled.set(false)
+        answered.set(false)
         requestAudioFocus()
         val wakeChallenge = settingsRepository.settingsFlow.first().wakeChallenge
         startForeground(NOTIFICATION_ID, buildForegroundNotification(prayer))
@@ -80,7 +83,13 @@ class CallForegroundService : Service() {
                 // coroutine so this collector loop stays free to react to an
                 // in-call Decline/hang-up immediately instead of queuing behind it.
                 when (action) {
-                    CallAction.Answer -> launch { handleAnswer(prayer) }
+                    // Guarded so a double-tap (or a stale queued Answer firing after the UI
+                    // already moved on) can't start a second conversation session alongside the
+                    // first — both would otherwise share the same singleton TTS/player and step
+                    // on each other's playback.
+                    CallAction.Answer -> if (answered.compareAndSet(false, true)) {
+                        answerJob = launch { handleAnswer(prayer) }
+                    }
                     CallAction.Decline -> handleDecline()
                 }
             }
@@ -118,18 +127,23 @@ class CallForegroundService : Service() {
             }
         }
 
-        // Logged here (covering both a full conversation and an early hang-up via Decline while
-        // InCall) rather than in handleDecline, so a mid-call decline is recorded as "answered"
-        // once — they did pick up — instead of racing two writes for the same call.
-        prayerLogRepository.logCallOutcome(LocalDate.now(), prayer, answered = true)
-        delay(1500)
-        finishCall()
+        // A concurrent Decline already logged the outcome and will cancel this job — skip
+        // logging and finishing again here so the two paths don't double-write the same call.
+        if (!cancelled.get()) {
+            prayerLogRepository.logCallOutcome(LocalDate.now(), prayer, answered = true)
+            delay(1500)
+            finishCall()
+        }
     }
 
     private fun handleDecline() {
         cancelled.set(true)
         ringtonePlayer.stop()
         conversationManager.stop()
+        // Log the outcome here, before cancelling — cancelling answerJob below can abort
+        // handleAnswer via CancellationException before it ever reaches its own post-call
+        // logging, so handleDecline owns the write for every decline path (not just Ringing),
+        // guarded by `cancelled` in handleAnswer so the two never both log the same call.
         when (val state = sessionController.uiState.value) {
             is CallUiState.Ringing -> {
                 sessionController.endCall(state.prayer)
@@ -137,9 +151,22 @@ class CallForegroundService : Service() {
                     prayerLogRepository.logCallOutcome(LocalDate.now(), state.prayer, answered = false)
                 }
             }
-            is CallUiState.InCall -> sessionController.endCall(state.prayer)
+            is CallUiState.InCall -> {
+                // They did pick up, so this still counts as answered even though they hung up
+                // partway through.
+                sessionController.endCall(state.prayer)
+                serviceScope.launch {
+                    prayerLogRepository.logCallOutcome(LocalDate.now(), state.prayer, answered = true)
+                }
+            }
             else -> Unit
         }
+        // The isCancelled() check inside ConversationManager's loop only runs between suspend
+        // points — while it's actually suspended awaiting a Gemini/ElevenLabs network call, it
+        // can't notice cancelled=true until that call returns. Cancelling the job directly
+        // propagates into the (now cancellation-aware) network call and aborts it immediately
+        // instead of leaving it running for a call the user already ended.
+        answerJob?.cancel()
         finishCall()
     }
 

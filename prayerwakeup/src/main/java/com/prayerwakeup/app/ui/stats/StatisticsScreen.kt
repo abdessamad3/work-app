@@ -1,6 +1,7 @@
 package com.prayerwakeup.app.ui.stats
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -23,14 +24,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.prayerwakeup.app.domain.Prayer
+import com.prayerwakeup.app.ui.theme.ZelligeBackground
 import java.time.LocalDate
 import java.time.format.TextStyle
 import java.util.Locale
@@ -40,10 +44,18 @@ import java.util.Locale
 fun StatisticsScreen(onBack: () -> Unit, viewModel: StatisticsViewModel = hiltViewModel()) {
     val state by viewModel.uiState.collectAsState()
 
+    Box(Modifier.fillMaxSize()) {
+    ZelligeBackground(
+        modifier = Modifier.fillMaxSize(),
+        baseColor = MaterialTheme.colorScheme.primary,
+        patternColor = MaterialTheme.colorScheme.secondary
+    )
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
                 title = { Text("الإحصائيات") },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "رجوع")
@@ -97,7 +109,7 @@ fun StatisticsScreen(onBack: () -> Unit, viewModel: StatisticsViewModel = hiltVi
                                 Icon(
                                     if (done) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
                                     contentDescription = prayer.arabicName,
-                                    tint = if (done) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                                    tint = if (done) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outline,
                                     modifier = Modifier.size(18.dp).padding(horizontal = 2.dp)
                                 )
                             }
@@ -113,6 +125,7 @@ fun StatisticsScreen(onBack: () -> Unit, viewModel: StatisticsViewModel = hiltVi
                 color = MaterialTheme.colorScheme.outline
             )
         }
+    }
     }
 }
 

@@ -4,13 +4,14 @@ import android.content.Context
 import android.media.MediaPlayer
 import com.prayerwakeup.app.data.settings.SecureKeyStore
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.withContext
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -19,6 +20,7 @@ import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 data class ElevenLabsVoice(val id: String, val name: String)
 
@@ -41,33 +43,31 @@ class ElevenLabsClient @Inject constructor(
 
     fun hasApiKey(): Boolean = keyStore.hasElevenLabsApiKey()
 
-    suspend fun fetchVoices(): Result<List<ElevenLabsVoice>> = withContext(Dispatchers.IO) {
-        runCatching {
-            val apiKey = keyStore.elevenLabsApiKey.value
-            if (apiKey.isBlank()) throw IllegalStateException("لا يوجد مفتاح ElevenLabs API")
+    suspend fun fetchVoices(): Result<List<ElevenLabsVoice>> = runCatching {
+        val apiKey = keyStore.elevenLabsApiKey.value
+        if (apiKey.isBlank()) throw IllegalStateException("لا يوجد مفتاح ElevenLabs API")
 
-            val request = Request.Builder()
-                .url("https://api.elevenlabs.io/v1/voices")
-                .addHeader("xi-api-key", apiKey)
-                .get()
-                .build()
+        val request = Request.Builder()
+            .url("https://api.elevenlabs.io/v1/voices")
+            .addHeader("xi-api-key", apiKey)
+            .get()
+            .build()
 
-            client.newCall(request).execute().use { response ->
-                val bodyString = response.body?.string().orEmpty()
-                if (!response.isSuccessful) throw IOException("ElevenLabs API error ${response.code}: $bodyString")
-                val voicesArray: JSONArray = JSONObject(bodyString).optJSONArray("voices") ?: JSONArray()
-                val voices = (0 until voicesArray.length()).map { i ->
-                    val v = voicesArray.getJSONObject(i)
-                    ElevenLabsVoice(id = v.getString("voice_id"), name = v.optString("name", "صوت"))
-                }
-                if (voices.isEmpty()) throw IOException("لا توجد أصوات متاحة في حسابك")
-                voices
+        executeCancellable(request) { response ->
+            val bodyString = response.body?.string().orEmpty()
+            if (!response.isSuccessful) throw IOException("ElevenLabs API error ${response.code}: $bodyString")
+            val voicesArray: JSONArray = JSONObject(bodyString).optJSONArray("voices") ?: JSONArray()
+            val voices = (0 until voicesArray.length()).map { i ->
+                val v = voicesArray.getJSONObject(i)
+                ElevenLabsVoice(id = v.getString("voice_id"), name = v.optString("name", "صوت"))
             }
+            if (voices.isEmpty()) throw IOException("لا توجد أصوات متاحة في حسابك")
+            voices
         }
     }
 
     /** Synthesizes [text] with ElevenLabs and plays it through the device speaker, suspending until done. */
-    suspend fun speak(text: String, voiceId: String): Result<Unit> = withContext(Dispatchers.IO) {
+    suspend fun speak(text: String, voiceId: String): Result<Unit> =
         synthesizeToFile(text, voiceId).mapCatching { file ->
             try {
                 playAndAwait(file)
@@ -75,9 +75,8 @@ class ElevenLabsClient @Inject constructor(
                 file.delete()
             }
         }
-    }
 
-    private fun synthesizeToFile(text: String, voiceId: String): Result<File> = runCatching {
+    private suspend fun synthesizeToFile(text: String, voiceId: String): Result<File> = runCatching {
         val apiKey = keyStore.elevenLabsApiKey.value
         if (apiKey.isBlank()) throw IllegalStateException("لا يوجد مفتاح ElevenLabs API")
 
@@ -92,7 +91,7 @@ class ElevenLabsClient @Inject constructor(
             .post(requestJson.toString().toRequestBody("application/json".toMediaType()))
             .build()
 
-        client.newCall(request).execute().use { response ->
+        executeCancellable(request) { response ->
             if (!response.isSuccessful) {
                 val errorBody = response.body?.string().orEmpty()
                 throw IOException("ElevenLabs API error ${response.code}: $errorBody")
@@ -103,6 +102,33 @@ class ElevenLabsClient @Inject constructor(
             file
         }
     }
+
+    // A plain blocking call.execute() ignores coroutine cancellation entirely — declining mid-call
+    // used to leave a synthesis request running for up to the full timeout even after the user had
+    // already hung up. enqueue() + suspendCancellableCoroutine lets invokeOnCancellation actually
+    // abort the in-flight request the moment the caller's job is cancelled. [onResponse] runs (and
+    // the response body gets read) on OkHttp's own callback thread, not the caller's, so this never
+    // blocks whatever dispatcher called into this client.
+    private suspend fun <T> executeCancellable(request: Request, onResponse: (Response) -> T): T =
+        suspendCancellableCoroutine { continuation ->
+            val call = client.newCall(request)
+            continuation.invokeOnCancellation { call.cancel() }
+            call.enqueue(object : Callback {
+                override fun onFailure(call: Call, e: IOException) {
+                    if (continuation.isActive) continuation.resumeWithException(e)
+                }
+
+                override fun onResponse(call: Call, response: Response) {
+                    val result = response.use { runCatching { onResponse(it) } }
+                    if (continuation.isActive) {
+                        result.fold(
+                            onSuccess = { continuation.resume(it) },
+                            onFailure = { continuation.resumeWithException(it) }
+                        )
+                    }
+                }
+            })
+        }
 
     private suspend fun playAndAwait(file: File): Unit = suspendCancellableCoroutine { continuation ->
         val player = MediaPlayer()
