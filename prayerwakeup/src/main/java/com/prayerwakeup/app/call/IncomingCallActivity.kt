@@ -14,7 +14,6 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -61,6 +60,8 @@ import com.prayerwakeup.app.data.settings.PrayerSettings
 import com.prayerwakeup.app.data.settings.SettingsRepository
 import com.prayerwakeup.app.domain.Prayer
 import com.prayerwakeup.app.domain.WakeChallenge
+import com.prayerwakeup.app.ui.theme.ThemePalette
+import com.prayerwakeup.app.ui.theme.ZelligeBackground
 import com.prayerwakeup.app.ui.theme.paletteFor
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.delay
@@ -92,7 +93,7 @@ class IncomingCallActivity : ComponentActivity() {
             MaterialTheme {
                 val state by sessionController.uiState.collectAsState()
                 val settings by settingsRepository.settingsFlow.collectAsState(initial = PrayerSettings())
-                val backgroundColor = paletteFor(settings.appTheme).primary
+                val palette = paletteFor(settings.appTheme)
                 var showChallenge by remember { mutableStateOf(false) }
 
                 // The Answer path never explicitly closes this screen — the service just runs the
@@ -111,7 +112,7 @@ class IncomingCallActivity : ComponentActivity() {
                 if (showChallenge) {
                     WakeChallengeScreen(
                         challenge = settings.wakeChallenge,
-                        backgroundColor = backgroundColor,
+                        palette = palette,
                         onCompleted = {
                             sessionController.requestDecline()
                             finish()
@@ -121,7 +122,7 @@ class IncomingCallActivity : ComponentActivity() {
                 } else {
                     CallScreen(
                         state = state,
-                        backgroundColor = backgroundColor,
+                        palette = palette,
                         onAnswer = { sessionController.requestAnswer() },
                         onDecline = {
                             // A configured challenge means a bare decline is never accepted on
@@ -158,13 +159,14 @@ class IncomingCallActivity : ComponentActivity() {
 }
 
 @Composable
-private fun CallScreen(state: CallUiState, backgroundColor: Color, onAnswer: () -> Unit, onDecline: () -> Unit) {
-    Surface(modifier = Modifier.fillMaxSize(), color = backgroundColor) {
+private fun CallScreen(state: CallUiState, palette: ThemePalette, onAnswer: () -> Unit, onDecline: () -> Unit) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        ZelligeBackground(modifier = Modifier.fillMaxSize(), baseColor = palette.primary, patternColor = palette.secondary)
         when (state) {
             is CallUiState.Idle -> Box(Modifier.fillMaxSize())
             is CallUiState.Ringing -> RingingContent(state.prayer, onAnswer, onDecline)
             is CallUiState.InCall -> InCallContent(state, onDecline)
-            is CallUiState.Ended -> EndedContent(state.prayer, backgroundColor)
+            is CallUiState.Ended -> EndedContent(state.prayer)
         }
     }
 }
@@ -289,9 +291,9 @@ private fun InCallContent(state: CallUiState.InCall, onDecline: () -> Unit) {
 }
 
 @Composable
-private fun EndedContent(prayer: Prayer, backgroundColor: Color) {
+private fun EndedContent(prayer: Prayer) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp).background(backgroundColor),
+        modifier = Modifier.fillMaxSize().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -310,26 +312,27 @@ private const val QURAN_MIN_SECONDS = 90
 @Composable
 private fun WakeChallengeScreen(
     challenge: WakeChallenge,
-    backgroundColor: Color,
+    palette: ThemePalette,
     onCompleted: () -> Unit,
     onCancel: () -> Unit
 ) {
     when (challenge) {
         WakeChallenge.NONE -> LaunchedEffect(Unit) { onCompleted() }
-        WakeChallenge.STEPS -> StepsChallengeContent(backgroundColor, onCompleted, onCancel)
-        WakeChallenge.MATH -> MathChallengeContent(backgroundColor, onCompleted, onCancel)
-        WakeChallenge.QURAN -> QuranChallengeContent(backgroundColor, onCompleted, onCancel)
+        WakeChallenge.STEPS -> StepsChallengeContent(palette, onCompleted, onCancel)
+        WakeChallenge.MATH -> MathChallengeContent(palette, onCompleted, onCancel)
+        WakeChallenge.QURAN -> QuranChallengeContent(palette, onCompleted, onCancel)
     }
 }
 
 @Composable
 private fun ChallengeScaffold(
     title: String,
-    backgroundColor: Color,
+    palette: ThemePalette,
     onCancel: () -> Unit,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Surface(modifier = Modifier.fillMaxSize(), color = backgroundColor) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        ZelligeBackground(modifier = Modifier.fillMaxSize(), baseColor = palette.primary, patternColor = palette.secondary)
         Column(
             modifier = Modifier.fillMaxSize().padding(32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -345,7 +348,7 @@ private fun ChallengeScaffold(
 }
 
 @Composable
-private fun StepsChallengeContent(backgroundColor: Color, onCompleted: () -> Unit, onCancel: () -> Unit) {
+private fun StepsChallengeContent(palette: ThemePalette, onCompleted: () -> Unit, onCancel: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var steps by remember { mutableStateOf(0) }
     var sensorAvailable by remember { mutableStateOf(true) }
@@ -368,7 +371,7 @@ private fun StepsChallengeContent(backgroundColor: Color, onCompleted: () -> Uni
         onDispose { sensorManager.unregisterListener(listener) }
     }
 
-    ChallengeScaffold(title = "امشِ 20 خطوة لإيقاف المنبه", backgroundColor = backgroundColor, onCancel = onCancel) {
+    ChallengeScaffold(title = "امشِ 20 خطوة لإيقاف المنبه", palette = palette, onCancel = onCancel) {
         if (!sensorAvailable) {
             Text("مستشعر الخطوات غير متوفر على هذا الجهاز.", color = Color.White, textAlign = TextAlign.Center)
             Spacer(Modifier.height(16.dp))
@@ -397,12 +400,12 @@ private fun generateMathProblem(): MathProblem {
 }
 
 @Composable
-private fun MathChallengeContent(backgroundColor: Color, onCompleted: () -> Unit, onCancel: () -> Unit) {
+private fun MathChallengeContent(palette: ThemePalette, onCompleted: () -> Unit, onCancel: () -> Unit) {
     var problem by remember { mutableStateOf(generateMathProblem()) }
     var answer by remember(problem) { mutableStateOf("") }
     var wrongAttempt by remember(problem) { mutableStateOf(false) }
 
-    ChallengeScaffold(title = "حل العملية الحسابية لإيقاف المنبه", backgroundColor = backgroundColor, onCancel = onCancel) {
+    ChallengeScaffold(title = "حل العملية الحسابية لإيقاف المنبه", palette = palette, onCancel = onCancel) {
         Text(problem.displayText, fontSize = 36.sp, color = Color.White, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(20.dp))
         OutlinedTextField(
@@ -435,7 +438,7 @@ private fun MathChallengeContent(backgroundColor: Color, onCompleted: () -> Unit
 }
 
 @Composable
-private fun QuranChallengeContent(backgroundColor: Color, onCompleted: () -> Unit, onCancel: () -> Unit) {
+private fun QuranChallengeContent(palette: ThemePalette, onCompleted: () -> Unit, onCancel: () -> Unit) {
     var remaining by remember { mutableStateOf(QURAN_MIN_SECONDS) }
     LaunchedEffect(Unit) {
         while (remaining > 0) {
@@ -444,7 +447,7 @@ private fun QuranChallengeContent(backgroundColor: Color, onCompleted: () -> Uni
         }
     }
 
-    ChallengeScaffold(title = "اتلُ 10 آيات من سورة البقرة لإيقاف المنبه", backgroundColor = backgroundColor, onCancel = onCancel) {
+    ChallengeScaffold(title = "اتلُ 10 آيات من سورة البقرة لإيقاف المنبه", palette = palette, onCancel = onCancel) {
         Text(
             "اتلُ عشر آيات من أول سورة البقرة (الآيات 1 إلى 10) من حفظك أو من مصحفك، ثم اضغط الزر أدناه بعد الانتهاء.",
             color = Color.White,

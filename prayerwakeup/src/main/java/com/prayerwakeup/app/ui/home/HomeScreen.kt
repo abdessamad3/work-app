@@ -41,6 +41,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -52,6 +53,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
@@ -60,6 +62,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.prayerwakeup.app.domain.Prayer
+import com.prayerwakeup.app.ui.theme.ZelligeBackground
 import kotlinx.coroutines.delay
 import java.time.Duration
 import java.time.ZonedDateTime
@@ -96,24 +99,32 @@ fun HomeScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("صلاتي") },
-                actions = {
-                    IconButton(onClick = onOpenQibla) {
-                        Icon(Icons.Filled.Explore, contentDescription = "اتجاه القبلة")
+    Box(Modifier.fillMaxSize()) {
+        ZelligeBackground(
+            modifier = Modifier.fillMaxSize(),
+            baseColor = MaterialTheme.colorScheme.primary,
+            patternColor = MaterialTheme.colorScheme.secondary
+        )
+        Scaffold(
+            containerColor = Color.Transparent,
+            topBar = {
+                TopAppBar(
+                    title = { Text("صلاتي") },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+                    actions = {
+                        IconButton(onClick = onOpenQibla) {
+                            Icon(Icons.Filled.Explore, contentDescription = "اتجاه القبلة")
+                        }
+                        IconButton(onClick = onOpenStatistics) {
+                            Icon(Icons.Filled.BarChart, contentDescription = "الإحصائيات")
+                        }
+                        IconButton(onClick = onOpenSettings) {
+                            Icon(Icons.Filled.Settings, contentDescription = "الإعدادات")
+                        }
                     }
-                    IconButton(onClick = onOpenStatistics) {
-                        Icon(Icons.Filled.BarChart, contentDescription = "الإحصائيات")
-                    }
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Filled.Settings, contentDescription = "الإعدادات")
-                    }
-                }
-            )
-        }
-    ) { padding ->
+                )
+            }
+        ) { padding ->
         if (state.loading) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
@@ -262,6 +273,7 @@ fun HomeScreen(
                 )
             }
         }
+    }
     }
 }
 
