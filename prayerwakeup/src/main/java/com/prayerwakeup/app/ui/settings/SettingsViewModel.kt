@@ -1,0 +1,315 @@
+package com.prayerwakeup.app.ui.settings
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.prayerwakeup.app.alarm.AlarmScheduler
+import com.prayerwakeup.app.conversation.ElevenLabsClient
+import com.prayerwakeup.app.conversation.ElevenLabsVoice
+import com.prayerwakeup.app.data.location.GeoPlace
+import com.prayerwakeup.app.data.location.GeocodingService
+import com.prayerwakeup.app.data.location.LocationProvider
+import com.prayerwakeup.app.data.remote.AlAdhanClient
+import com.prayerwakeup.app.data.remote.MawaqitClient
+import com.prayerwakeup.app.data.remote.MawaqitTimes
+import com.prayerwakeup.app.data.remote.MoroccoCity
+import com.prayerwakeup.app.data.remote.MoroccoHabousClient
+import com.prayerwakeup.app.data.settings.PrayerSettings
+import com.prayerwakeup.app.data.settings.SecureKeyStore
+import com.prayerwakeup.app.data.settings.SettingsRepository
+import com.prayerwakeup.app.domain.AppTheme
+import com.prayerwakeup.app.domain.CalculationMethod
+import com.prayerwakeup.app.domain.CallerPersona
+import com.prayerwakeup.app.domain.Madhab
+import com.prayerwakeup.app.domain.Prayer
+import com.prayerwakeup.app.domain.PrayerTimeSource
+import com.prayerwakeup.app.domain.WakeChallenge
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZonedDateTime
+import javax.inject.Inject
+
+data class SettingsUiState(
+    val settings: PrayerSettings = PrayerSettings(),
+    val geminiApiKey: String = "",
+    val elevenLabsApiKey: String = "",
+    val canScheduleExactAlarms: Boolean = true
+)
+
+sealed interface MoroccoCitiesUiState {
+    data object Idle : MoroccoCitiesUiState
+    data object Loading : MoroccoCitiesUiState
+    data class Loaded(val cities: List<MoroccoCity>) : MoroccoCitiesUiState
+    data class Error(val message: String) : MoroccoCitiesUiState
+}
+
+sealed interface ElevenLabsVoicesUiState {
+    data object Idle : ElevenLabsVoicesUiState
+    data object Loading : ElevenLabsVoicesUiState
+    data class Loaded(val voices: List<ElevenLabsVoice>) : ElevenLabsVoicesUiState
+    data class Error(val message: String) : ElevenLabsVoicesUiState
+}
+
+sealed interface MawaqitLookupUiState {
+    data object Idle : MawaqitLookupUiState
+    data object Loading : MawaqitLookupUiState
+    data class Loaded(val times: MawaqitTimes) : MawaqitLookupUiState
+    data class Error(val message: String) : MawaqitLookupUiState
+}
+
+sealed interface AlAdhanPreviewUiState {
+    data object Idle : AlAdhanPreviewUiState
+    data object Loading : AlAdhanPreviewUiState
+    data class Loaded(val times: Map<Prayer, ZonedDateTime>) : AlAdhanPreviewUiState
+    data class Error(val message: String) : AlAdhanPreviewUiState
+}
+
+sealed interface LocationSearchUiState {
+    data object Idle : LocationSearchUiState
+    data object Loading : LocationSearchUiState
+    data class Loaded(val places: List<GeoPlace>) : LocationSearchUiState
+    data class Error(val message: String) : LocationSearchUiState
+}
+
+@HiltViewModel
+class SettingsViewModel @Inject constructor(
+    private val settingsRepository: SettingsRepository,
+    private val secureKeyStore: SecureKeyStore,
+    private val locationProvider: LocationProvider,
+    private val alarmScheduler: AlarmScheduler,
+    private val moroccoHabousClient: MoroccoHabousClient,
+    private val elevenLabsClient: ElevenLabsClient,
+    private val mawaqitClient: MawaqitClient,
+    private val alAdhanClient: AlAdhanClient,
+    private val geocodingService: GeocodingService
+) : ViewModel() {
+
+    private val _moroccoCities = MutableStateFlow<MoroccoCitiesUiState>(MoroccoCitiesUiState.Idle)
+    val moroccoCities: StateFlow<MoroccoCitiesUiState> = _moroccoCities.asStateFlow()
+
+    private val _elevenLabsVoices = MutableStateFlow<ElevenLabsVoicesUiState>(ElevenLabsVoicesUiState.Idle)
+    val elevenLabsVoices: StateFlow<ElevenLabsVoicesUiState> = _elevenLabsVoices.asStateFlow()
+
+    private val _mawaqitLookup = MutableStateFlow<MawaqitLookupUiState>(MawaqitLookupUiState.Idle)
+    val mawaqitLookup: StateFlow<MawaqitLookupUiState> = _mawaqitLookup.asStateFlow()
+
+    private val _alAdhanPreview = MutableStateFlow<AlAdhanPreviewUiState>(AlAdhanPreviewUiState.Idle)
+    val alAdhanPreview: StateFlow<AlAdhanPreviewUiState> = _alAdhanPreview.asStateFlow()
+
+    private val _locationSearch = MutableStateFlow<LocationSearchUiState>(LocationSearchUiState.Idle)
+    val locationSearch: StateFlow<LocationSearchUiState> = _locationSearch.asStateFlow()
+
+    val uiState: StateFlow<SettingsUiState> = combine(
+        settingsRepository.settingsFlow,
+        secureKeyStore.geminiApiKey,
+        secureKeyStore.elevenLabsApiKey
+    ) { settings, geminiKey, elevenLabsKey ->
+        SettingsUiState(
+            settings = settings,
+            geminiApiKey = geminiKey,
+            elevenLabsApiKey = elevenLabsKey,
+            canScheduleExactAlarms = alarmScheduler.canScheduleExactAlarms()
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
+
+    private var locating = false
+
+    fun detectLocation(onResult: (success: Boolean) -> Unit) {
+        if (locating) return
+        locating = true
+        viewModelScope.launch {
+            val location = locationProvider.getCurrentLocation()
+            locating = false
+            if (location != null) {
+                // A raw GPS fix means nothing to the user in the settings list, so it's
+                // reverse-geocoded into an actual place name; if that fails (no geocoder
+                // backend, no network yet), fall back to the old generic label rather than
+                // blocking on it.
+                val place = geocodingService.reverseGeocode(location.latitude, location.longitude)
+                settingsRepository.updateLocation(
+                    location.latitude, location.longitude, locationProvider.deviceTimeZoneId(),
+                    place?.label ?: "الموقع الحالي (GPS)"
+                )
+                alarmScheduler.rescheduleAll()
+                onResult(true)
+            } else {
+                onResult(false)
+            }
+        }
+    }
+
+    fun setManualLocation(latitude: Double, longitude: Double, timeZoneId: String, label: String) {
+        viewModelScope.launch {
+            settingsRepository.updateLocation(latitude, longitude, timeZoneId, label)
+            alarmScheduler.rescheduleAll()
+        }
+    }
+
+    fun searchLocation(query: String) {
+        _locationSearch.value = LocationSearchUiState.Loading
+        viewModelScope.launch {
+            geocodingService.searchPlaces(query)
+                .onSuccess { _locationSearch.value = LocationSearchUiState.Loaded(it) }
+                .onFailure { _locationSearch.value = LocationSearchUiState.Error(it.message ?: "تعذر البحث") }
+        }
+    }
+
+    fun resetLocationSearch() {
+        _locationSearch.value = LocationSearchUiState.Idle
+    }
+
+    // A place found by name search has no GPS fix of its own, so there's no real timezone to
+    // read off it — the device's current zone is used as a practical default (correct for the
+    // very common case of finding a nearby city), same as the "use my GPS location" flow.
+    fun selectSearchedPlace(place: GeoPlace) {
+        viewModelScope.launch {
+            settingsRepository.updateLocation(place.latitude, place.longitude, locationProvider.deviceTimeZoneId(), place.label)
+            alarmScheduler.rescheduleAll()
+        }
+        _locationSearch.value = LocationSearchUiState.Idle
+    }
+
+    fun setCalculationMethod(method: CalculationMethod) {
+        viewModelScope.launch {
+            settingsRepository.updateCalculationMethod(method)
+            alarmScheduler.rescheduleAll()
+        }
+    }
+
+    fun setMadhab(madhab: Madhab) {
+        viewModelScope.launch {
+            settingsRepository.updateMadhab(madhab)
+            alarmScheduler.rescheduleAll()
+        }
+    }
+
+    fun togglePrayer(prayer: Prayer, currentSet: Set<Prayer>) {
+        val updated = if (currentSet.contains(prayer)) currentSet - prayer else currentSet + prayer
+        viewModelScope.launch {
+            settingsRepository.updateEnabledPrayers(updated)
+            alarmScheduler.rescheduleAll()
+        }
+    }
+
+    fun setSnoozeMinutes(minutes: Int) {
+        viewModelScope.launch { settingsRepository.updateSnoozeMinutes(minutes) }
+    }
+
+    fun setMaxCallMinutes(minutes: Int) {
+        viewModelScope.launch { settingsRepository.updateMaxCallMinutes(minutes) }
+    }
+
+    fun setPersona(persona: CallerPersona) {
+        viewModelScope.launch { settingsRepository.updatePersona(persona) }
+    }
+
+    fun setWakeChallenge(challenge: WakeChallenge) {
+        viewModelScope.launch { settingsRepository.updateWakeChallenge(challenge) }
+    }
+
+    fun setAppTheme(theme: AppTheme) {
+        viewModelScope.launch { settingsRepository.updateAppTheme(theme) }
+    }
+
+    fun saveGeminiApiKey(key: String) {
+        secureKeyStore.setGeminiApiKey(key.trim())
+    }
+
+    fun setPrayerTimeSource(source: PrayerTimeSource) {
+        viewModelScope.launch {
+            settingsRepository.updatePrayerTimeSource(source)
+            alarmScheduler.rescheduleAll()
+        }
+        if (source == PrayerTimeSource.MOROCCO_HABOUS && _moroccoCities.value is MoroccoCitiesUiState.Idle) {
+            loadMoroccoCities()
+        }
+        if (source == PrayerTimeSource.ALADHAN) {
+            previewAlAdhan()
+        }
+    }
+
+    fun loadMoroccoCities() {
+        _moroccoCities.value = MoroccoCitiesUiState.Loading
+        viewModelScope.launch {
+            moroccoHabousClient.fetchCities()
+                .onSuccess { _moroccoCities.value = MoroccoCitiesUiState.Loaded(it) }
+                .onFailure { _moroccoCities.value = MoroccoCitiesUiState.Error(it.message ?: "تعذر تحميل قائمة المدن") }
+        }
+    }
+
+    fun setMoroccoCity(city: MoroccoCity) {
+        viewModelScope.launch {
+            settingsRepository.updateMoroccoCity(city.id, city.displayLabel)
+            alarmScheduler.rescheduleAll()
+        }
+    }
+
+    fun saveElevenLabsApiKey(key: String) {
+        secureKeyStore.setElevenLabsApiKey(key.trim())
+    }
+
+    fun loadElevenLabsVoices() {
+        _elevenLabsVoices.value = ElevenLabsVoicesUiState.Loading
+        viewModelScope.launch {
+            elevenLabsClient.fetchVoices()
+                .onSuccess { _elevenLabsVoices.value = ElevenLabsVoicesUiState.Loaded(it) }
+                .onFailure { _elevenLabsVoices.value = ElevenLabsVoicesUiState.Error(it.message ?: "تعذر تحميل قائمة الأصوات") }
+        }
+    }
+
+    fun setElevenLabsVoice(voice: ElevenLabsVoice) {
+        viewModelScope.launch { settingsRepository.updateElevenLabsVoice(voice.id, voice.name) }
+    }
+
+    fun clearElevenLabsVoice() {
+        viewModelScope.launch { settingsRepository.updateElevenLabsVoice("", "") }
+    }
+
+    // Unlike Morocco Habous (a picked-from-a-list city), a mosque ID is free-typed, so it's
+    // verified by fetching it once before being saved — this both confirms the ID is real and
+    // shows the user which mosque they're about to select, since the ID alone means nothing to them.
+    fun lookupMawaqitMosque(mosqueId: String) {
+        val id = mosqueId.trim()
+        if (id.isBlank()) return
+        _mawaqitLookup.value = MawaqitLookupUiState.Loading
+        viewModelScope.launch {
+            mawaqitClient.fetchTodayTimes(id)
+                .onSuccess { _mawaqitLookup.value = MawaqitLookupUiState.Loaded(it) }
+                .onFailure { _mawaqitLookup.value = MawaqitLookupUiState.Error(it.message ?: "تعذر العثور على المسجد") }
+        }
+    }
+
+    fun confirmMawaqitMosque(mosqueId: String, times: MawaqitTimes) {
+        viewModelScope.launch {
+            settingsRepository.updateMawaqitMosque(mosqueId.trim(), times.mosqueName)
+            alarmScheduler.rescheduleAll()
+        }
+    }
+
+    fun resetMawaqitLookup() {
+        _mawaqitLookup.value = MawaqitLookupUiState.Idle
+    }
+
+    // AlAdhan needs no per-user setup (it just reuses the location + method + madhab already
+    // configured for the offline calculator), so this preview is purely reassurance that the
+    // service is reachable and returning sane values — not a precondition to selecting it.
+    fun previewAlAdhan() {
+        _alAdhanPreview.value = AlAdhanPreviewUiState.Loading
+        viewModelScope.launch {
+            val settings = uiState.value.settings
+            val zoneId = runCatching { ZoneId.of(settings.timeZoneId) }.getOrDefault(ZoneId.systemDefault())
+            alAdhanClient.fetchTodayTimes(
+                settings.latitude, settings.longitude, LocalDate.now(zoneId), zoneId, settings.calculationMethod, settings.madhab
+            )
+                .onSuccess { _alAdhanPreview.value = AlAdhanPreviewUiState.Loaded(it) }
+                .onFailure { _alAdhanPreview.value = AlAdhanPreviewUiState.Error(it.message ?: "تعذر جلب مواقيت اليوم") }
+        }
+    }
+}
